@@ -1,0 +1,220 @@
+import ollama
+from typing import Optional, Dict, Any
+import logging
+from app.config import settings
+
+logger = logging.getLogger(__name__)
+
+
+class OllamaService:
+    """Service for interacting with Ollama LLM"""
+    
+    def __init__(self):
+        self.client = ollama.Client(host=settings.OLLAMA_URL)
+        self.model = settings.OLLAMA_MODEL
+    
+    def test_connection(self) -> bool:
+        """Test if Ollama is accessible"""
+        try:
+            # List available models
+            models = self.client.list()
+            return True
+        except Exception as e:
+            logger.error(f"Ollama connection test failed: {e}")
+            return False
+    
+    def list_models(self) -> list:
+        """Get list of available models"""
+        try:
+            response = self.client.list()
+            return response.get('models', [])
+        except Exception as e:
+            logger.error(f"Error listing models: {e}")
+            return []
+    
+    def model_exists(self, model_name: str = None) -> bool:
+        """Check if a specific model exists"""
+        model = model_name or self.model
+        try:
+            models = self.list_models()
+            model_names = [m['name'] for m in models]
+            return model in model_names
+        except Exception as e:
+            logger.error(f"Error checking model existence: {e}")
+            return False
+    
+    def generate(
+        self,
+        prompt: str,
+        model: str = None,
+        stream: bool = False,
+        options: Dict[str, Any] = None
+    ) -> Dict[str, Any]:
+        """
+        Generate text using Ollama
+        
+        Args:
+            prompt: The prompt to send to the model
+            model: Model name (defaults to configured model)
+            stream: Whether to stream the response
+            options: Additional options for generation
+        
+        Returns:
+            Dict containing the response
+        """
+        model = model or self.model
+        
+        try:
+            response = self.client.generate(
+                model=model,
+                prompt=prompt,
+                stream=stream,
+                options=options or {}
+            )
+            
+            return {
+                "success": True,
+                "model": model,
+                "response": response['response'],
+                "context": response.get('context'),
+                "total_duration": response.get('total_duration'),
+                "prompt_eval_count": response.get('prompt_eval_count'),
+                "eval_count": response.get('eval_count')
+            }
+        except Exception as e:
+            logger.error(f"Generation error: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    def chat(
+        self,
+        messages: list,
+        model: str = None,
+        stream: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Chat with Ollama (maintains conversation context)
+        
+        Args:
+            messages: List of message dicts with 'role' and 'content'
+            model: Model name
+            stream: Whether to stream
+        
+        Returns:
+            Dict containing the response
+        """
+        model = model or self.model
+        
+        try:
+            response = self.client.chat(
+                model=model,
+                messages=messages,
+                stream=stream
+            )
+            
+            return {
+                "success": True,
+                "model": model,
+                "message": response['message'],
+                "total_duration": response.get('total_duration')
+            }
+        except Exception as e:
+            logger.error(f"Chat error: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    def generate_sql(
+        self,
+        question: str,
+        schema: str,
+        context: str = ""
+    ) -> Dict[str, Any]:
+        """
+        Generate SQL query from natural language question
+        
+        Args:
+            question: Natural language question
+            schema: Database schema information
+            context: Additional context (optional)
+        
+        Returns:
+            Dict with generated SQL query
+        """
+        prompt = self._build_sql_prompt(question, schema, context)
+        
+        response = self.generate(
+            prompt=prompt,
+            options={
+                "temperature": 0.1,  # Lower temperature for more consistent SQL
+                "num_predict": 500,   # Max tokens for SQL query
+            }
+        )
+        
+        if response['success']:
+            sql = self._extract_sql(response['response'])
+            return {
+                "success": True,
+                "sql": sql,
+                "raw_response": response['response'],
+                "model": response['model']
+            }
+        else:
+            return response
+    
+    def _build_sql_prompt(
+        self,
+        question: str,
+        schema: str,
+        context: str = ""
+    ) -> str:
+        """Build prompt for SQL generation"""
+        # Build context section separately to avoid backslash in f-string
+        context_section = f"### Additional Context:\n{context}\n\n" if context else ""
+        
+        prompt = f"""### Instructions:
+Your task is to convert a question into a SQL query, given a PostgreSQL database schema.
+Adhere to these rules:
+- **Deliberately go through the question and database schema word by word** to appropriately answer the question
+- **Use Table Aliases** to prevent ambiguity. For example, `SELECT table1.col1, table2.col1 FROM table1 JOIN table2 ON table1.id = table2.id`.
+- When creating a ratio, always cast the numerator as float
+- Return ONLY the SQL query without any markdown formatting, explanations, or code blocks
+- Use only SELECT statements
+
+### Database Schema:
+{schema}
+
+### Question:
+{question}
+
+{context_section}### SQL Query:
+SELECT"""
+        
+        return prompt
+    
+    def _extract_sql(self, response: str) -> str:
+        """Extract SQL query from response"""
+        # Remove markdown code blocks if present
+        code_block_sql = "```sql"
+        code_block_generic = "```"
+        
+        if code_block_sql in response:
+            response = response.split(code_block_sql)[1].split(code_block_generic)[0]
+        elif code_block_generic in response:
+            response = response.split(code_block_generic)[1].split(code_block_generic)[0]
+        
+        # Clean up
+        sql = response.strip()
+        
+        # Ensure it starts with SELECT
+        if not sql.upper().startswith('SELECT'):
+            sql = 'SELECT ' + sql
+        
+        return sql
+
+
+# Global instance
+ollama_service = OllamaService()
