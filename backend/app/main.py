@@ -8,7 +8,6 @@ from app.models.database import get_db, test_connection, get_database_info
 from app.services.ollama_service import ollama_service
 from app.routers import database, ollama, upload, query
 
-# Initialize FastAPI app
 app = FastAPI(
     title="Hospital Analytics API",
     description="Natural Language to SQL API with Ollama",
@@ -17,7 +16,6 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -26,20 +24,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers
 app.include_router(database.router)
 app.include_router(ollama.router)
 app.include_router(upload.router)
 app.include_router(query.router)
 
 
-# Startup event
 @app.on_event("startup")
 async def startup_event():
     """Run on application startup"""
     print("Starting Hospital Analytics API...")
     
-    # Test database connection
     if test_connection():
         print("Database connection successful")
         db_info = get_database_info()
@@ -48,13 +43,11 @@ async def startup_event():
     else:
         print("Database connection failed")
     
-    # Test Ollama connection
     if ollama_service.test_connection():
         print("Ollama connection successful")
         print(f"URL: {settings.OLLAMA_URL}")
         print(f"Default model: {ollama_service.model}")
         
-        # Check if model exists
         if ollama_service.model_exists():
             print(f"Model '{ollama_service.model}' is available")
         else:

@@ -5,10 +5,9 @@ import os
 import json
 from datetime import datetime
 
-# Configuration
+
 BACKEND_URL = os.getenv("BACKEND_API_URL", "http://backend:8000")
 
-# Page configuration
 st.set_page_config(
     page_title="Hospital Analytics",
     page_icon="🏥",
@@ -16,7 +15,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS
 st.markdown("""
 <style>
     .main-header {
@@ -55,84 +53,78 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Title
-st.markdown('<p class="main-header">🏥 Hospital Analytics Platform</p>', unsafe_allow_html=True)
+st.markdown('<p class="main-header">Hospital Analytics Platform</p>', unsafe_allow_html=True)
 st.markdown('<p class="sub-header">Natural Language to SQL Query System</p>', unsafe_allow_html=True)
 
-# Sidebar
 with st.sidebar:
     st.header("Navigation")
     page = st.radio(
         "Go to:",
-        ["🏠 Home", "📁 Upload CSV", "🔍 Query Data", "📊 View Tables", "📈 Analytics"],
+        ["Home", "Upload CSV", "Query Data", "View Tables", "Analytics"],
         key="navigation"
     )
     
     st.markdown("---")
     
-    # System Status
     st.subheader("System Status")
     try:
         response = requests.get(f"{BACKEND_URL}/health", timeout=5)
         if response.status_code == 200:
             health = response.json()
-            st.success("✅ Backend Online")
+            st.success("Backend Online")
             
             if health.get("database") == "connected":
-                st.success("✅ Database Connected")
+                st.success("Database Connected")
             else:
-                st.error("❌ Database Disconnected")
+                st.error("Database Disconnected")
             
             if health.get("ollama") == "connected":
-                st.success("✅ AI Model Ready")
+                st.success("AI Model Ready")
             else:
-                st.warning("⚠️ AI Model Not Ready")
+                st.warning("AI Model Not Ready")
         else:
-            st.error("❌ Backend Error")
+            st.error("Backend Error")
     except Exception as e:
-        st.error("❌ Cannot reach backend")
+        st.error("Cannot reach backend")
         st.caption(f"Error: {str(e)}")
     
     st.markdown("---")
     st.caption("Powered by Ollama & SQLCoder")
 
-# Home Page
-if page == "🏠 Home":
+if page == "Home":
     st.header("Welcome to Hospital Analytics")
     
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        st.info("**📁 Upload Data**\n\nUpload CSV files to automatically create database tables")
+        st.info("**Upload Data**\n\nUpload CSV files to automatically create database tables")
     
     with col2:
-        st.info("**🔍 Query**\n\nAsk questions in natural language and get instant answers")
+        st.info("**Query**\n\nAsk questions in natural language and get instant answers")
     
     with col3:
-        st.info("**📊 Analyze**\n\nVisualize your data with auto-generated charts")
+        st.info("**Analyze**\n\nVisualize your data with auto-generated charts")
     
     st.markdown("---")
-    
-    # Quick Start Guide
     st.subheader("Quick Start Guide")
     
     st.markdown("""
-    ### 1️⃣ Upload Your Data
+    ### 1 Upload Your Data
     - Go to **Upload CSV** page
     - Select your CSV file
     - Table will be automatically created
     
-    ### 2️⃣ Ask Questions
+    ### 2 Ask Questions
     - Go to **Query Data** page
     - Type your question in plain English
     - Get SQL query and results instantly
     
-    ### 3️⃣ Explore Tables
+    ### 3 Explore Tables
     - Go to **View Tables** page
     - Browse all your tables
     - View sample data and statistics
     
-    ### 4️⃣ Analyze
+    ### 4 Analyze
     - Go to **Analytics** page
     - Access Metabase dashboard
     - Create custom visualizations
@@ -140,7 +132,6 @@ if page == "🏠 Home":
     
     st.markdown("---")
     
-    # Example Questions
     st.subheader("Example Questions You Can Ask")
     
     examples = [
@@ -157,9 +148,8 @@ if page == "🏠 Home":
         with cols[i % 2]:
             st.code(example, language=None)
 
-# Upload CSV Page
-elif page == "📁 Upload CSV":
-    st.header("📁 Upload CSV File")
+elif page == "Upload CSV":
+    st.header("Upload CSV File")
     
     st.markdown("""
     Upload a CSV file to automatically:
@@ -169,7 +159,6 @@ elif page == "📁 Upload CSV":
     - Load data
     """)
     
-    # File uploader
     uploaded_file = st.file_uploader("Choose a CSV file", type=['csv'])
     
     col1, col2 = st.columns(2)
@@ -185,30 +174,29 @@ elif page == "📁 Upload CSV":
         )
     
     if uploaded_file is not None:
-        st.success(f"✅ File selected: **{uploaded_file.name}**")
+        st.success(f"File selected: **{uploaded_file.name}**")
         st.caption(f"Size: {uploaded_file.size:,} bytes")
         
-        # Preview CSV
+        
         if st.checkbox("Preview CSV content"):
             try:
                 preview_df = pd.read_csv(uploaded_file)
                 st.dataframe(preview_df.head(10))
-                uploaded_file.seek(0)  # Reset file pointer
+                uploaded_file.seek(0) 
             except Exception as e:
                 st.error(f"Error reading CSV: {e}")
         
-        # Upload button
-        if st.button("🚀 Upload and Process", type="primary"):
+        if st.button("Upload and Process", type="primary"):
             with st.spinner("Processing CSV file..."):
                 try:
-                    # Prepare request
+                    
                     files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "text/csv")}
                     data = {
                         "table_name": custom_table_name if custom_table_name else "",
                         "if_exists": if_exists
                     }
                     
-                    # Upload
+                    
                     response = requests.post(
                         f"{BACKEND_URL}/api/upload/",
                         files=files,
@@ -220,10 +208,8 @@ elif page == "📁 Upload CSV":
                         result = response.json()
                         
                         st.markdown('<div class="success-box">', unsafe_allow_html=True)
-                        st.success("✅ CSV uploaded and processed successfully!")
+                        st.success("CSV uploaded and processed successfully!")
                         st.markdown('</div>', unsafe_allow_html=True)
-                        
-                        # Display results
                         col1, col2, col3 = st.columns(3)
                         with col1:
                             st.metric("Table Name", result['table_name'])
@@ -232,60 +218,56 @@ elif page == "📁 Upload CSV":
                         with col3:
                             st.metric("Columns", len(result['schema']['columns']))
                         
-                        # Schema details
+                        
                         with st.expander("📋 View Detected Schema"):
                             st.json(result['schema'])
                         
-                        # SQL
-                        with st.expander("📝 View Generated SQL"):
+                        
+                        with st.expander("View Generated SQL"):
                             st.code(result['schema']['create_sql'], language='sql')
                         
-                        # Sample data
+                        
                         if result['schema'].get('sample_data'):
-                            with st.expander("👀 View Sample Data"):
+                            with st.expander("View Sample Data"):
                                 st.dataframe(pd.DataFrame(result['schema']['sample_data']))
                         
                     else:
                         st.markdown('<div class="error-box">', unsafe_allow_html=True)
-                        st.error(f"❌ Upload failed: {response.status_code}")
+                        st.error(f"Upload failed: {response.status_code}")
                         st.write(response.text)
                         st.markdown('</div>', unsafe_allow_html=True)
                         
                 except Exception as e:
                     st.markdown('<div class="error-box">', unsafe_allow_html=True)
-                    st.error(f"❌ Error: {str(e)}")
+                    st.error(f"Error: {str(e)}")
                     st.markdown('</div>', unsafe_allow_html=True)
 
-# Query Data Page
+
 elif page == "🔍 Query Data":
     st.header("🔍 Natural Language Query")
     
     st.markdown("Ask questions about your data in plain English!")
     
-    # Get suggestions
     try:
         suggestions_response = requests.get(f"{BACKEND_URL}/api/query/suggestions", timeout=5)
         if suggestions_response.status_code == 200:
             suggestions_data = suggestions_response.json()
             suggestions = suggestions_data.get('suggestions', [])
             
-            # Display database stats
             stats = suggestions_data.get('database_stats', {})
             if stats.get('tables'):
-                st.info(f"📊 **Database**: {stats['table_count']} tables | Total rows: {sum(t['row_count'] for t in stats['tables'])}")
+                st.info(f"**Database**: {stats['table_count']} tables | Total rows: {sum(t['row_count'] for t in stats['tables'])}")
     except:
         suggestions = []
     
-    # Query input
     question = st.text_area(
         "Enter your question:",
         placeholder="e.g., How many employees are in each department?",
         height=100
     )
     
-    # Suggestions
     if suggestions:
-        st.caption("💡 Suggested questions:")
+        st.caption("Suggested questions:")
         cols = st.columns(3)
         for i, suggestion in enumerate(suggestions[:6]):
             with cols[i % 3]:
@@ -300,12 +282,10 @@ elif page == "🔍 Query Data":
     with col2:
         result_limit = st.number_input("Result limit", min_value=10, max_value=1000, value=100, step=10)
     
-    # Query button
-    if st.button("🔍 Search", type="primary", disabled=not question):
+    if st.button("Search", type="primary", disabled=not question):
         if question:
-            with st.spinner("🤖 Generating SQL and fetching results..."):
+            with st.spinner("Generating SQL and fetching results..."):
                 try:
-                    # Send query
                     response = requests.post(
                         f"{BACKEND_URL}/api/query/",
                         json={
@@ -320,14 +300,12 @@ elif page == "🔍 Query Data":
                         result = response.json()
                         
                         st.markdown('<div class="success-box">', unsafe_allow_html=True)
-                        st.success("✅ Query successful!")
+                        st.success("Query successful!")
                         st.markdown('</div>', unsafe_allow_html=True)
                         
-                        # Display SQL
                         st.subheader("Generated SQL")
                         st.code(result['sql'], language='sql')
                         
-                        # Display results if executed
                         if result.get('executed'):
                             st.subheader("Results")
                             
@@ -338,53 +316,51 @@ elif page == "🔍 Query Data":
                                 st.metric("Columns", len(result.get('columns', [])))
                             
                             if result.get('data'):
-                                # Display as dataframe
+                                
                                 df = pd.DataFrame(result['data'])
                                 st.dataframe(df, use_container_width=True)
                                 
-                                # Download button
+                                
                                 csv = df.to_csv(index=False)
                                 st.download_button(
-                                    label="📥 Download as CSV",
+                                    label="Download as CSV",
                                     data=csv,
                                     file_name=f"query_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                                     mime="text/csv"
                                 )
                                 
-                                # Simple visualization for numeric data
+                                
                                 numeric_cols = df.select_dtypes(include=['int64', 'float64']).columns.tolist()
                                 if len(numeric_cols) > 0 and len(df) > 1:
-                                    st.subheader("📊 Visualization")
+                                    st.subheader("Visualization")
                                     
                                     if len(df.columns) == 2 and len(numeric_cols) == 1:
-                                        # Bar chart
+                                        
                                         st.bar_chart(df.set_index(df.columns[0]))
                                     elif len(numeric_cols) > 0:
-                                        # Line chart
+                                        
                                         st.line_chart(df[numeric_cols])
                             else:
                                 st.info("No data returned")
                         
-                        # Show raw response
+                        
                         with st.expander("🔍 View Raw Response"):
                             st.json(result)
                     
                     else:
                         st.markdown('<div class="error-box">', unsafe_allow_html=True)
-                        st.error(f"❌ Query failed: {response.status_code}")
+                        st.error(f"Query failed: {response.status_code}")
                         st.write(response.text)
                         st.markdown('</div>', unsafe_allow_html=True)
                         
                 except Exception as e:
                     st.markdown('<div class="error-box">', unsafe_allow_html=True)
-                    st.error(f"❌ Error: {str(e)}")
+                    st.error(f"Error: {str(e)}")
                     st.markdown('</div>', unsafe_allow_html=True)
 
-# View Tables Page
-elif page == "📊 View Tables":
-    st.header("📊 Database Tables")
+elif page == "View Tables":
+    st.header("Database Tables")
     
-    # Get all tables
     try:
         response = requests.get(f"{BACKEND_URL}/api/database/tables", timeout=5)
         if response.status_code == 200:
@@ -394,11 +370,11 @@ elif page == "📊 View Tables":
             if tables:
                 st.success(f"Found {len(tables)} table(s)")
                 
-                # Table selector
+                
                 selected_table = st.selectbox("Select a table to view:", tables)
                 
                 if selected_table:
-                    # Get table info
+                    
                     table_response = requests.get(
                         f"{BACKEND_URL}/api/database/tables/{selected_table}",
                         timeout=5
@@ -407,7 +383,7 @@ elif page == "📊 View Tables":
                     if table_response.status_code == 200:
                         table_info = table_response.json()
                         
-                        # Table statistics
+                        
                         col1, col2, col3 = st.columns(3)
                         
                         with col1:
@@ -425,13 +401,13 @@ elif page == "📊 View Tables":
                         with col3:
                             st.metric("Primary Keys", len(table_info.get('primary_keys', [])))
                         
-                        # Column details
-                        with st.expander("📋 Column Details"):
+                        
+                        with st.expander("Column Details"):
                             if table_info.get('columns'):
                                 cols_df = pd.DataFrame(table_info['columns'])
                                 st.dataframe(cols_df, use_container_width=True)
                         
-                        # Sample data
+                        
                         st.subheader("Sample Data")
                         sample_limit = st.slider("Number of rows to display:", 5, 100, 10)
                         
@@ -448,7 +424,7 @@ elif page == "📊 View Tables":
                             else:
                                 st.info("No data in table")
             else:
-                st.info("📭 No tables found. Upload some CSV files to get started!")
+                st.info("No tables found. Upload some CSV files to get started!")
                 
         else:
             st.error("Failed to fetch tables")
@@ -456,9 +432,8 @@ elif page == "📊 View Tables":
     except Exception as e:
         st.error(f"Error: {str(e)}")
 
-# Analytics Page
-elif page == "📈 Analytics":
-    st.header("📈 Analytics Dashboard")
+elif page == "Analytics":
+    st.header("Analytics Dashboard")
     
     st.info("Access the Metabase dashboard for advanced analytics and visualizations")
     
@@ -474,14 +449,13 @@ elif page == "📈 Analytics":
         - Data exploration tools
         """)
         
-        if st.button("🚀 Open Metabase", type="primary"):
+        if st.button("Open Metabase", type="primary"):
             st.markdown('[Open Metabase in new tab](http://localhost:3000)', unsafe_allow_html=True)
     
     with col2:
         st.subheader("Quick Stats")
         
         try:
-            # Get database stats
             response = requests.get(f"{BACKEND_URL}/api/query/suggestions", timeout=5)
             if response.status_code == 200:
                 data = response.json()
