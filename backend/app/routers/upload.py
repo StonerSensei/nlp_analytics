@@ -19,15 +19,12 @@ async def analyze_csv(file: UploadFile = File(...)):
     
     Upload a CSV file to see its detected schema, data types, and primary/foreign keys.
     """
-    # Validate file type
     if not file.filename.endswith('.csv'):
         raise HTTPException(status_code=400, detail="Only CSV files are allowed")
     
     try:
-        # Read file content
         content = await file.read()
         
-        # Extract schema
         result = schema_extractor.extract_from_csv(content, file.filename)
         
         if not result['success']:
@@ -59,24 +56,19 @@ async def upload_and_create_table(
     2. Create table in database
     3. Load data into table
     """
-    # Validate file type
     if not file.filename.endswith('.csv'):
         raise HTTPException(status_code=400, detail="Only CSV files are allowed")
     
     try:
-        # Read file content
         content = await file.read()
         
-        # Extract schema
         schema_result = schema_extractor.extract_from_csv(content, file.filename)
         
         if not schema_result['success']:
             raise HTTPException(status_code=400, detail=schema_result['error'])
         
-        # Use custom table name if provided
         final_table_name = table_name or schema_result['table_name']
         
-        # Check if table exists
         exists = table_exists(final_table_name)
         
         if exists and if_exists == "fail":
@@ -85,27 +77,22 @@ async def upload_and_create_table(
                 detail=f"Table '{final_table_name}' already exists. Use if_exists='replace' or 'append' to override."
             )
         
-        # Create or replace table
         if not exists or if_exists == "replace":
-            # Update table name in SQL
             create_sql = schema_result['create_sql'].replace(
                 schema_result['table_name'],
                 final_table_name
             )
             
-            # Drop table if replacing
             if exists and if_exists == "replace":
                 with data_loader.engine.connect() as conn:
                     conn.execute(f"DROP TABLE IF EXISTS {final_table_name} CASCADE")
                     conn.commit()
             
-            # Create table
             create_result = data_loader.create_table_from_sql(create_sql)
             
             if not create_result['success']:
                 raise HTTPException(status_code=500, detail=create_result['error'])
         
-        # Load data
         load_result = data_loader.load_csv_data(
             content,
             final_table_name,
@@ -115,7 +102,6 @@ async def upload_and_create_table(
         if not load_result['success']:
             raise HTTPException(status_code=500, detail=load_result['error'])
         
-        # Get final table info
         table_info = get_table_info(final_table_name)
         
         return {

@@ -33,12 +33,10 @@ class QueryService:
             schema_parts = []
             
             for table_name in tables:
-                # Get columns
                 columns = inspector.get_columns(table_name)
                 pk_constraint = inspector.get_pk_constraint(table_name)
                 foreign_keys = inspector.get_foreign_keys(table_name)
                 
-                # Build CREATE TABLE statement
                 col_defs = []
                 for col in columns:
                     col_def = f"{col['name']} {col['type']}"
@@ -46,12 +44,10 @@ class QueryService:
                         col_def += " NOT NULL"
                     col_defs.append(col_def)
                 
-                # Add primary key
                 if pk_constraint and pk_constraint.get('constrained_columns'):
                     pk_cols = ', '.join(pk_constraint['constrained_columns'])
                     col_defs.append(f"PRIMARY KEY ({pk_cols})")
                 
-                # Add foreign keys
                 for fk in foreign_keys:
                     fk_cols = ', '.join(fk['constrained_columns'])
                     ref_table = fk['referred_table']
@@ -85,7 +81,6 @@ class QueryService:
             Dict with SQL query and results
         """
         try:
-            # Get database schema
             schema = self.generate_database_schema_context()
             
             if not schema or schema == "No tables found in database.":
@@ -95,7 +90,6 @@ class QueryService:
                     "suggestion": "Upload CSV files using POST /api/upload/"
                 }
             
-            # Generate SQL using Ollama
             sql_result = self.ollama.generate_sql(
                 question=question,
                 schema=schema,
@@ -111,7 +105,6 @@ class QueryService:
             
             generated_sql = sql_result['sql']
             
-            # Add LIMIT if not present and limit is specified
             if limit and 'LIMIT' not in generated_sql.upper():
                 generated_sql = generated_sql.rstrip(';') + f" LIMIT {limit};"
             
@@ -123,7 +116,6 @@ class QueryService:
                 "model": sql_result.get('model', '')
             }
             
-            # Execute query if requested
             if execute:
                 execution_result = self._execute_generated_query(generated_sql)
                 response.update(execution_result)
@@ -148,22 +140,18 @@ class QueryService:
             Dict with execution results
         """
         try:
-            # Safety check: only allow SELECT queries
             if not sql.strip().upper().startswith('SELECT'):
                 return {
                     "executed": False,
                     "error": "Only SELECT queries are allowed for safety"
                 }
             
-            # Execute query
             with self.engine.connect() as conn:
                 result = conn.execute(text(sql))
                 
-                # Fetch results
                 rows = result.fetchall()
                 columns = list(result.keys())
                 
-                # Convert to list of dicts
                 data = []
                 for row in rows:
                     data.append(dict(zip(columns, row)))
@@ -173,7 +161,7 @@ class QueryService:
                     "row_count": len(data),
                     "columns": columns,
                     "data": data,
-                    "execution_time_ms": None  # Can add timing if needed
+                    "execution_time_ms": None  
                 }
                 
         except SQLAlchemyError as e:
@@ -202,28 +190,27 @@ class QueryService:
                 f"Show me the first 10 rows from {tables[0]}",
             ]
             
-            # Add table-specific suggestions
-            for table in tables[:3]:  # Limit to first 3 tables
+            for table in tables[:3]: 
                 table_info = get_table_info(table)
                 if table_info and 'columns' in table_info:
                     columns = [col['name'] for col in table_info['columns']]
                     
-                    # Suggest counting
+                   
                     suggestions.append(f"Count all records in {table}")
                     
-                    # Suggest grouping if there are string columns
+                  
                     string_cols = [col['name'] for col in table_info['columns'] 
                                  if 'VARCHAR' in str(col['type']) or 'TEXT' in str(col['type'])]
                     if string_cols:
                         suggestions.append(f"Group {table} by {string_cols[0]}")
                     
-                    # Suggest ordering if there are numeric columns
+                   
                     numeric_cols = [col['name'] for col in table_info['columns']
                                   if 'INT' in str(col['type']) or 'FLOAT' in str(col['type'])]
                     if numeric_cols and len(numeric_cols) > 1:
                         suggestions.append(f"Show {table} ordered by {numeric_cols[0]} descending")
             
-            return suggestions[:10]  # Return max 10 suggestions
+            return suggestions[:10]  
             
         except Exception as e:
             logger.error(f"Error generating suggestions: {e}")
@@ -256,5 +243,4 @@ class QueryService:
             return {"error": str(e)}
 
 
-# Global instance
 query_service = QueryService()

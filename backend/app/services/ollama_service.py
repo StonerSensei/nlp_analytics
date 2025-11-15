@@ -16,7 +16,6 @@ class OllamaService:
     def test_connection(self) -> bool:
         """Test if Ollama is accessible"""
         try:
-            # List available models
             models = self.client.list()
             return True
         except Exception as e:
@@ -149,8 +148,8 @@ class OllamaService:
         response = self.generate(
             prompt=prompt,
             options={
-                "temperature": 0.1,  # Lower temperature for more consistent SQL
-                "num_predict": 500,   # Max tokens for SQL query
+                "temperature": 0.1,  
+                "num_predict": 500,  
             }
         )
         
@@ -172,7 +171,6 @@ class OllamaService:
         context: str = ""
     ) -> str:
         """Build prompt for SQL generation"""
-        # Build context section separately to avoid backslash in f-string
         context_section = f"### Additional Context:\n{context}\n\n" if context else ""
         
         prompt = f"""### Instructions:
@@ -197,7 +195,6 @@ SELECT"""
     
     def _extract_sql(self, response: str) -> str:
         """Extract SQL query from response"""
-        # Remove markdown code blocks if present
         code_block_sql = "```sql"
         code_block_generic = "```"
         
@@ -206,15 +203,12 @@ SELECT"""
         elif code_block_generic in response:
             response = response.split(code_block_generic)[1].split(code_block_generic)[0]
         
-        # Clean up
         sql = response.strip()
         
-        # Ensure it starts with SELECT
         if not sql.upper().startswith('SELECT'):
             sql = 'SELECT ' + sql
         
         return sql
 
 
-# Global instance
 ollama_service = OllamaService()

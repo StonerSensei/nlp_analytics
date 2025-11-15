@@ -15,7 +15,7 @@ class GenerateRequest(BaseModel):
 
 
 class ChatMessage(BaseModel):
-    role: str  # 'user', 'assistant', or 'system'
+    role: str 
     content: str
 
 

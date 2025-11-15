@@ -61,19 +61,16 @@ class DataLoader:
             Dict with result
         """
         try:
-            # Read CSV
             df = pd.read_csv(io.BytesIO(file_content))
             
-            # Sanitize column names to match table schema
             df.columns = [self._sanitize_column_name(col) for col in df.columns]
             
-            # Load data using pandas to_sql (uses COPY internally for PostgreSQL)
             rows_inserted = df.to_sql(
                 name=table_name,
                 con=self.engine,
                 if_exists=if_exists,
                 index=False,
-                method='multi',  # Faster bulk insert
+                method='multi',  
                 chunksize=1000
             )
             
@@ -100,5 +97,4 @@ class DataLoader:
         return name
 
 
-# Global instance
 data_loader = DataLoader()
