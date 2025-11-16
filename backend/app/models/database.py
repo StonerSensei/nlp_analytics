@@ -26,7 +26,7 @@ SessionLocal = sessionmaker(
 )
 
 metadata = MetaData()
-
+     
 
 def get_db() -> Generator[Session, None, None]:
     """
