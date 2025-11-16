@@ -14,6 +14,7 @@ class NaturalLanguageQuery(BaseModel):
     question: str = Field(..., description="Natural language question about your data")
     execute: bool = Field(True, description="Whether to execute the generated SQL")
     limit: Optional[int] = Field(100, description="Maximum number of rows to return")
+    table_name: Optional[str] = Field(None, description="Specific table to query (optional)")
 
 
 @router.post("/")
@@ -28,12 +29,17 @@ async def query_database(query: NaturalLanguageQuery):
     - "Show me all employees in the Engineering department"
     - "What is the average salary by department?"
     - "List the top 5 highest paid employees"
+
+    **Table Selection:**
+    - Leave table_name empty to query across all tables
+    - Specify table_name to focus on a specific table
     """
     try:
         result = query_service.query_from_natural_language(
             question=query.question,
             execute=query.execute,
-            limit=query.limit
+            limit=query.limit,
+            table_name=query.table_name
         )
         
         if not result['success']:

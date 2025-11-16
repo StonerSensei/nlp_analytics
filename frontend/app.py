@@ -248,6 +248,41 @@ elif page == "Query Data":
     
     st.markdown("Ask questions about your data in plain English!")
     
+    selected_table = None
+    try:
+        tables_response = requests.get(f"{BACKEND_URL}/api/database/tables", timeout=5)
+        if tables_response.status_code == 200:
+            tables_data = tables_response.json()
+            tables = tables_data.get('tables', [])
+            
+            if tables:
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    selected_table = st.selectbox(
+                        "Select table to query:",
+                        ["All tables"] + tables,
+                        help="Choose a specific table or query across all tables"
+                    )
+                with col2:
+                    st.metric("Available Tables", len(tables))
+                
+                
+                if selected_table and selected_table != "All tables":
+                    count_response = requests.get(
+                        f"{BACKEND_URL}/api/database/tables/{selected_table}/count",
+                        timeout=5
+                    )
+                    if count_response.status_code == 200:
+                        count_data = count_response.json()
+                        st.info(f"Selected: **{selected_table}** ({count_data.get('row_count', 0)} rows)")
+            else:
+                st.warning("No tables found. Please upload CSV files first.")
+                selected_table = None
+    except Exception as e:
+        st.error(f"Error loading tables: {str(e)}")
+        selected_table = None
+    
+    
     try:
         suggestions_response = requests.get(f"{BACKEND_URL}/api/query/suggestions", timeout=5)
         if suggestions_response.status_code == 200:
@@ -256,15 +291,21 @@ elif page == "Query Data":
             
             stats = suggestions_data.get('database_stats', {})
             if stats.get('tables'):
-                st.info(f"**Database**: {stats['table_count']} tables | Total rows: {sum(t['row_count'] for t in stats['tables'])}")
+                total_rows = sum(t['row_count'] for t in stats['tables'])
+                st.caption(f"Database: {stats['table_count']} tables | {total_rows} total rows")
     except:
         suggestions = []
     
+    st.markdown("---")
+    
+    
     question = st.text_area(
         "Enter your question:",
-        placeholder="e.g., How many employees are in each department?",
-        height=100
+        placeholder="e.g., How many records are there? What is the average value?",
+        height=100,
+        help="Ask questions about your data in plain English"
     )
+    
     
     if suggestions:
         st.caption("Suggested questions:")
@@ -277,7 +318,7 @@ elif page == "Query Data":
     col1, col2 = st.columns([3, 1])
     
     with col1:
-        execute_query = st.checkbox("Execute query", value=True)
+        execute_query = st.checkbox("Execute query", value=True, help="Uncheck to only generate SQL without executing")
     
     with col2:
         result_limit = st.number_input("Result limit", min_value=10, max_value=1000, value=100, step=10)
@@ -286,13 +327,18 @@ elif page == "Query Data":
         if question:
             with st.spinner("Generating SQL and fetching results..."):
                 try:
+                    request_data = {
+                        "question": question,
+                        "execute": execute_query,
+                        "limit": result_limit
+                    }
+                    
+                    if selected_table and selected_table != "All tables":
+                        request_data["table_name"] = selected_table
+                    
                     response = requests.post(
                         f"{BACKEND_URL}/api/query/",
-                        json={
-                            "question": question,
-                            "execute": execute_query,
-                            "limit": result_limit
-                        },
+                        json=request_data,
                         timeout=60
                     )
                     
@@ -302,10 +348,10 @@ elif page == "Query Data":
                         st.markdown('<div class="success-box">', unsafe_allow_html=True)
                         st.success("Query successful!")
                         st.markdown('</div>', unsafe_allow_html=True)
-                        
                         st.subheader("Generated SQL")
                         st.code(result['sql'], language='sql')
                         
+                        st.caption(f"Model: {result.get('model', 'Unknown')}")
                         if result.get('executed'):
                             st.subheader("Results")
                             
@@ -316,10 +362,8 @@ elif page == "Query Data":
                                 st.metric("Columns", len(result.get('columns', [])))
                             
                             if result.get('data'):
-                                
                                 df = pd.DataFrame(result['data'])
                                 st.dataframe(df, use_container_width=True)
-                                
                                 
                                 csv = df.to_csv(index=False)
                                 st.download_button(
@@ -329,22 +373,18 @@ elif page == "Query Data":
                                     mime="text/csv"
                                 )
                                 
-                                
                                 numeric_cols = df.select_dtypes(include=['int64', 'float64']).columns.tolist()
                                 if len(numeric_cols) > 0 and len(df) > 1:
                                     st.subheader("Visualization")
                                     
                                     if len(df.columns) == 2 and len(numeric_cols) == 1:
-                                        
                                         st.bar_chart(df.set_index(df.columns[0]))
                                     elif len(numeric_cols) > 0:
-                                        
                                         st.line_chart(df[numeric_cols])
                             else:
                                 st.info("No data returned")
                         
-                        
-                        with st.expander("🔍 View Raw Response"):
+                        with st.expander("View Raw Response"):
                             st.json(result)
                     
                     else:
@@ -357,6 +397,7 @@ elif page == "Query Data":
                     st.markdown('<div class="error-box">', unsafe_allow_html=True)
                     st.error(f"Error: {str(e)}")
                     st.markdown('</div>', unsafe_allow_html=True)
+
 
 elif page == "View Tables":
     st.header("Database Tables")

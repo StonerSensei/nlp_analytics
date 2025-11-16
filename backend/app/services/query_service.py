@@ -16,9 +16,12 @@ class QueryService:
         self.engine = engine
         self.ollama = ollama_service
     
-    def generate_database_schema_context(self) -> str:
+    def generate_database_schema_context(self, table_name: Optional[str] = None) -> str:
         """
         Generate a comprehensive schema description for the LLM
+        
+        Args:
+            table_name: Optional specific table to include (filters schema to single table)
         
         Returns:
             String containing database schema information
@@ -27,16 +30,25 @@ class QueryService:
             inspector = inspect(self.engine)
             tables = inspector.get_table_names()
             
+            # Filter to specific table if requested
+            if table_name:
+                if table_name in tables:
+                    tables = [table_name]
+                else:
+                    return f"Table '{table_name}' not found in database."
+            
             if not tables:
                 return "No tables found in database."
             
             schema_parts = []
             
-            for table_name in tables:
-                columns = inspector.get_columns(table_name)
-                pk_constraint = inspector.get_pk_constraint(table_name)
-                foreign_keys = inspector.get_foreign_keys(table_name)
+            for table in tables:
+                # Get columns
+                columns = inspector.get_columns(table)
+                pk_constraint = inspector.get_pk_constraint(table)
+                foreign_keys = inspector.get_foreign_keys(table)
                 
+                # Build CREATE TABLE statement
                 col_defs = []
                 for col in columns:
                     col_def = f"{col['name']} {col['type']}"
@@ -44,17 +56,19 @@ class QueryService:
                         col_def += " NOT NULL"
                     col_defs.append(col_def)
                 
+                # Add primary key
                 if pk_constraint and pk_constraint.get('constrained_columns'):
                     pk_cols = ', '.join(pk_constraint['constrained_columns'])
                     col_defs.append(f"PRIMARY KEY ({pk_cols})")
                 
+                # Add foreign keys
                 for fk in foreign_keys:
                     fk_cols = ', '.join(fk['constrained_columns'])
                     ref_table = fk['referred_table']
                     ref_cols = ', '.join(fk['referred_columns'])
                     col_defs.append(f"FOREIGN KEY ({fk_cols}) REFERENCES {ref_table}({ref_cols})")
                 
-                table_schema = f"CREATE TABLE {table_name} (\n    " + ",\n    ".join(col_defs) + "\n);"
+                table_schema = f"CREATE TABLE {table} (\n    " + ",\n    ".join(col_defs) + "\n);"
                 schema_parts.append(table_schema)
             
             return "\n\n".join(schema_parts)
@@ -62,12 +76,14 @@ class QueryService:
         except Exception as e:
             logger.error(f"Error generating schema context: {e}")
             return "Error retrieving database schema."
+
     
     def query_from_natural_language(
         self,
         question: str,
         execute: bool = True,
-        limit: Optional[int] = 100
+        limit: Optional[int] = 100,
+        table_name: Optional[str] = None
     ) -> Dict:
         """
         Convert natural language question to SQL and optionally execute it
@@ -76,12 +92,13 @@ class QueryService:
             question: Natural language question
             execute: Whether to execute the generated SQL
             limit: Maximum number of rows to return
+            table_name: Specific table to query (optional, filters schema)
         
         Returns:
             Dict with SQL query and results
         """
         try:
-            schema = self.generate_database_schema_context()
+            schema = self.generate_database_schema_context(table_name=table_name)
             
             if not schema or schema == "No tables found in database.":
                 return {
@@ -90,10 +107,18 @@ class QueryService:
                     "suggestion": "Upload CSV files using POST /api/upload/"
                 }
             
+            context_parts = [f"Limit results to {limit} rows if not specified in the question."]
+        
+            if table_name:
+                context_parts.append(f"Focus on the '{table_name}' table.")
+                context_parts.append(f"Use '{table_name}' as the primary table in your query.")
+            
+            context = " ".join(context_parts)
+            
             sql_result = self.ollama.generate_sql(
                 question=question,
                 schema=schema,
-                context=f"Limit results to {limit} rows if not specified in the question."
+                context=context
             )
             
             if not sql_result['success']:
@@ -113,7 +138,8 @@ class QueryService:
                 "question": question,
                 "sql": generated_sql,
                 "raw_llm_response": sql_result.get('raw_response', ''),
-                "model": sql_result.get('model', '')
+                "model": sql_result.get('model', ''),
+                "table_context": table_name if table_name else "all tables"
             }
             
             if execute:
