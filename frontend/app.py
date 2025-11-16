@@ -219,7 +219,7 @@ elif page == "Upload CSV":
                             st.metric("Columns", len(result['schema']['columns']))
                         
                         
-                        with st.expander("📋 View Detected Schema"):
+                        with st.expander("View Detected Schema"):
                             st.json(result['schema'])
                         
                         
@@ -243,8 +243,8 @@ elif page == "Upload CSV":
                     st.markdown('</div>', unsafe_allow_html=True)
 
 
-elif page == "🔍 Query Data":
-    st.header("🔍 Natural Language Query")
+elif page == "Query Data":
+    st.header("Natural Language Query")
     
     st.markdown("Ask questions about your data in plain English!")
     
