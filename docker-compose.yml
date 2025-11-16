@@ -41,8 +41,8 @@ services:
  
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: ./backend  # file docker can access
+      dockerfile: Dockerfile  # instruction for building docker image
     container_name: hospital-backend
     restart: unless-stopped
     env_file:
@@ -52,7 +52,7 @@ services:
       - ./backend/app:/app/app  # Hot reload for development
     ports:
       - "8000:8000"
-    depends_on:
+    depends_on:  # wait until PostgreSQL and Ollama service started
       postgres:
         condition: service_healthy
       ollama:
@@ -75,7 +75,7 @@ services:
     environment:
       BACKEND_API_URL: ${BACKEND_API_URL}
     volumes:
-      - ./frontend:/app  # Hot reload for development
+      - ./frontend:/app
     ports:
       - "8501:8501"
     depends_on:
