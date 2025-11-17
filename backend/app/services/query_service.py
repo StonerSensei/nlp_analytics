@@ -48,7 +48,7 @@ class QueryService:
                 pk_constraint = inspector.get_pk_constraint(table)
                 foreign_keys = inspector.get_foreign_keys(table)
                 
-                # Build CREATE TABLE statement
+                
                 col_defs = []
                 for col in columns:
                     col_def = f"{col['name']} {col['type']}"
@@ -56,12 +56,12 @@ class QueryService:
                         col_def += " NOT NULL"
                     col_defs.append(col_def)
                 
-                # Add primary key
+                
                 if pk_constraint and pk_constraint.get('constrained_columns'):
                     pk_cols = ', '.join(pk_constraint['constrained_columns'])
                     col_defs.append(f"PRIMARY KEY ({pk_cols})")
                 
-                # Add foreign keys
+                
                 for fk in foreign_keys:
                     fk_cols = ', '.join(fk['constrained_columns'])
                     ref_table = fk['referred_table']
