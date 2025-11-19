@@ -172,15 +172,21 @@ class OllamaService:
     ) -> str:
         """Build prompt for SQL generation"""
         context_section = f"### Additional Context:\n{context}\n\n" if context else ""
+
+        import re
+        table_names = re.findall(r'CREATE TABLE "?(\w+)"?', schema)
+        table_list = "\n".join([f'  - "{t}" (EXACT name, do not add "s")' for t in table_names])
         
         prompt = f"""### Instructions:
-Your task is to convert a question into a SQL query, given a PostgreSQL database schema.
-Adhere to these rules:
-- **Deliberately go through the question and database schema word by word** to appropriately answer the question
-- **Use Table Aliases** to prevent ambiguity. For example, `SELECT table1.col1, table2.col1 FROM table1 JOIN table2 ON table1.id = table2.id`.
-- When creating a ratio, always cast the numerator as float
-- Return ONLY the SQL query without any markdown formatting, explanations, or code blocks
-- Use only SELECT statements
+Convert the question into a valid PostgreSQL SELECT query.
+
+CRITICAL - TABLE NAMES:
+{table_list}
+RULES:
+1. Use EXACT table names listed above - NEVER add 's' to pluralize
+2. Always use double quotes: "table_name"
+3. Return ONLY the SQL query - no explanations or markdown
+4. Use table aliases for joins: FROM "table1" t1
 
 ### Database Schema:
 {schema}

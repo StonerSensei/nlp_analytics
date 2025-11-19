@@ -149,98 +149,637 @@ if page == "Home":
             st.code(example, language=None)
 
 elif page == "Upload CSV":
-    st.header("Upload CSV File")
+    st.header("Upload CSV File - Wizard")
     
-    st.markdown("""
-    Upload a CSV file to automatically:
-    - Detect schema and data types
-    - Identify primary and foreign keys
-    - Create database table
-    - Load data
-    """)
+    # Initialize wizard state
+    if 'wizard_step' not in st.session_state:
+        st.session_state.wizard_step = 1
+    if 'wizard_data' not in st.session_state:
+        st.session_state.wizard_data = {}
     
-    uploaded_file = st.file_uploader("Choose a CSV file", type=['csv'])
+    # Progress indicator
+    steps = ["Upload", "Parse", "Schema", "Primary Key", "Foreign Keys", "Confirm"]
+    current_step = st.session_state.wizard_step
     
-    col1, col2 = st.columns(2)
+    progress_cols = st.columns(len(steps))
+    for i, step in enumerate(steps):
+        with progress_cols[i]:
+            if i + 1 < current_step:
+                st.success(f"✓ {step}")
+            elif i + 1 == current_step:
+                st.info(f"→ **{step}**")
+            else:
+                st.text(f"○ {step}")
     
-    with col1:
-        custom_table_name = st.text_input("Custom table name (optional)", placeholder="Leave empty for auto-generation")
+    st.markdown("---")
     
-    with col2:
+    # Helper functions for navigation
+    def next_step():
+        st.session_state.wizard_step += 1
+    
+    def prev_step():
+        st.session_state.wizard_step -= 1
+    
+    def reset_wizard():
+        st.session_state.wizard_step = 1
+        st.session_state.wizard_data = {}
+    
+    # STEP 1: Upload File
+    if current_step == 1:
+        st.subheader("Step 1: Upload CSV File")
+        
+        uploaded_file = st.file_uploader("Choose a CSV file", type=['csv'], key="wizard_upload")
+        
+        if uploaded_file is not None:
+            st.session_state.wizard_data['file'] = uploaded_file
+            st.session_state.wizard_data['filename'] = uploaded_file.name
+            
+            st.success(f"File selected: {uploaded_file.name}")
+            st.caption(f"Size: {uploaded_file.size:,} bytes")
+            
+            if st.button("Next: Analyze Structure", type="primary"):
+                with st.spinner("Analyzing file..."):
+                    try:
+                        uploaded_file.seek(0)
+                        files = {"file": (uploaded_file.name, uploaded_file.read(), "text/csv")}
+                        data = {"preview_lines": 20}
+                        
+                        response = requests.post(
+                            f"{BACKEND_URL}/api/upload/preview",
+                            files=files,
+                            data=data,
+                            timeout=30
+                        )
+                        
+                        if response.status_code == 200:
+                            result = response.json()
+                            st.session_state.wizard_data['analysis'] = result['analysis']
+                            next_step()
+                            st.rerun()
+                        else:
+                            st.error(f"Analysis failed: {response.text}")
+                    except Exception as e:
+                        st.error(f"Error: {str(e)}")
+        else:
+            st.info("Please upload a CSV file to begin")
+    
+    # STEP 2: Configure Parsing
+    elif current_step == 2:
+        st.subheader("Step 2: Configure CSV Parsing")
+        
+        analysis = st.session_state.wizard_data.get('analysis', {})
+        
+        if not analysis:
+            st.error("Analysis data missing. Please restart.")
+            if st.button("Restart"):
+                reset_wizard()
+                st.rerun()
+            st.stop()
+        
+        # Show detection confidence
+        confidence = analysis.get('confidence', 0)
+        if confidence >= 80:
+            st.success(f"High confidence detection: {confidence:.0f}%")
+        elif confidence >= 60:
+            st.warning(f"Medium confidence: {confidence:.0f}% - Please verify")
+        else:
+            st.error(f"Low confidence: {confidence:.0f}% - Manual adjustment recommended")
+        
+        st.caption(f"Reasoning: {analysis.get('reasoning', 'N/A')}")
+        
+        # Show preview
+        st.markdown("#### Raw File Preview")
+        preview_text = ""
+        for i, line in enumerate(analysis.get('preview', [])[:20]):
+            if i == analysis.get('detected_header_row', 0):
+                preview_text += f">>> [{i}] {line}\n"
+            else:
+                preview_text += f"    [{i}] {line}\n"
+        
+        st.text_area("First 20 lines", preview_text, height=300, disabled=True)
+        
+        # Manual adjustment
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            header_row = st.number_input(
+                "Header row number",
+                min_value=0,
+                max_value=19,
+                value=analysis.get('detected_header_row', 0),
+                help="Which row contains column names?"
+            )
+        
+        with col2:
+            if header_row > 0:
+                st.info(f"Will skip rows: 0 to {header_row - 1}")
+        
+        st.session_state.wizard_data['header_row'] = header_row
+        
+        # Navigation
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("← Back"):
+                prev_step()
+                st.rerun()
+        with col2:
+            if st.button("Next: Generate Schema →", type="primary"):
+                with st.spinner("Generating schema..."):
+                    try:
+                        uploaded_file = st.session_state.wizard_data['file']
+                        uploaded_file.seek(0)
+                        
+                        skip_rows_str = ",".join(map(str, range(header_row))) if header_row > 0 else None
+                        
+                        files = {"file": (uploaded_file.name, uploaded_file.read(), "text/csv")}
+                        data = {
+                            "header_row": header_row,
+                            "skip_rows": skip_rows_str
+                        }
+                        
+                        response = requests.post(
+                            f"{BACKEND_URL}/api/upload/analyze",
+                            files=files,
+                            data=data,
+                            timeout=30
+                        )
+                        
+                        if response.status_code == 200:
+                            st.session_state.wizard_data['schema'] = response.json()
+                            next_step()
+                            st.rerun()
+                        else:
+                            st.error(f"Schema generation failed: {response.text}")
+                    except Exception as e:
+                        st.error(f"Error: {str(e)}")
+    
+    # STEP 3: Review Schema
+    elif current_step == 3:
+        st.subheader("Step 3: Review Detected Schema")
+        
+        schema = st.session_state.wizard_data.get('schema', {})
+        
+        if not schema:
+            st.error("Schema data missing")
+            if st.button("Restart"):
+                reset_wizard()
+                st.rerun()
+            st.stop()
+        
+        # Table info
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            table_name = st.text_input("Table name", value=schema.get('table_name', ''))
+            st.session_state.wizard_data['table_name'] = table_name
+        with col2:
+            st.metric("Rows", schema.get('row_count', 0))
+        with col3:
+            st.metric("Columns", len(schema.get('columns', [])))
+        
+        # Show columns
+        st.markdown("#### Detected Columns")
+        if schema.get('columns'):
+            cols_df = pd.DataFrame(schema['columns'])[['name', 'sql_type', 'nullable', 'unique']]
+            st.dataframe(cols_df, use_container_width=True)
+        
+        # Sample data
+        with st.expander("View Sample Data"):
+            if schema.get('sample_data'):
+                st.dataframe(pd.DataFrame(schema['sample_data']))
+        
+        # Navigation
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("← Back"):
+                prev_step()
+                st.rerun()
+        with col2:
+            if st.button("Next: Select Primary Key →", type="primary"):
+                # Get column statistics
+                with st.spinner("Analyzing columns for primary key selection..."):
+                    try:
+                        uploaded_file = st.session_state.wizard_data['file']
+                        uploaded_file.seek(0)
+                        
+                        header_row = st.session_state.wizard_data.get('header_row', 0)
+                        skip_rows_str = ",".join(map(str, range(header_row))) if header_row > 0 else None
+                        
+                        files = {"file": (uploaded_file.name, uploaded_file.read(), "text/csv")}
+                        data = {
+                            "header_row": header_row,
+                            "skip_rows": skip_rows_str
+                        }
+                        
+                        response = requests.post(
+                            f"{BACKEND_URL}/api/upload/column-stats",
+                            files=files,
+                            data=data,
+                            timeout=30
+                        )
+                        
+                        if response.status_code == 200:
+                            st.session_state.wizard_data['column_stats'] = response.json()
+                            next_step()
+                            st.rerun()
+                        else:
+                            st.error(f"Failed to get column stats: {response.text}")
+                    except Exception as e:
+                        st.error(f"Error: {str(e)}")
+    
+    # STEP 4: Select Primary Key
+    elif current_step == 4:
+        st.subheader("Step 4: Select Primary Key")
+        
+        st.info("""
+        **Primary Key Options:**
+        - **Auto-generated ID (Recommended):** System adds an automatic row number
+        - **Select existing column:** Choose a column with unique values
+        - **No primary key:** Not recommended for most cases
+        """)
+        
+        column_stats = st.session_state.wizard_data.get('column_stats', {})
+        schema = st.session_state.wizard_data.get('schema', {})
+        
+        if not column_stats or not schema:
+            st.error("Missing data")
+            if st.button("Restart"):
+                reset_wizard()
+                st.rerun()
+            st.stop()
+        
+        stats = column_stats.get('column_stats', [])
+        
+        # Show column suitability analysis
+        st.markdown("#### Column Suitability Analysis")
+        
+        suitable_columns = []
+        
+        # Create expandable section for column details
+        with st.expander("View detailed column analysis", expanded=False):
+            for stat in stats:
+                col1, col2, col3, col4 = st.columns([3, 2, 2, 2])
+                
+                with col1:
+                    st.text(stat['name'])
+                with col2:
+                    if stat['suitable_for_pk']:
+                        st.success("✓ Suitable")
+                        suitable_columns.append(stat['name'])
+                    else:
+                        st.error("✗ Not suitable")
+                with col3:
+                    st.caption(f"{stat['uniqueness_percent']}% unique")
+                with col4:
+                    if stat['has_nulls']:
+                        st.caption(f"⚠ {stat['null_count']} nulls")
+                    else:
+                        st.caption("✓ No nulls")
+        
+        # Show summary
+        if suitable_columns:
+            st.success(f"Found {len(suitable_columns)} suitable column(s) for primary key")
+        else:
+            st.warning("No suitable columns found. Auto-generated ID is recommended.")
+        
+        st.markdown("---")
+        
+        # Primary key selector
+        detected_pk = schema.get('primary_key', '')
+        
+        # Build options list
+        pk_options = [
+            "🔑 Auto-generated ID (Recommended)",
+            "⊘ No primary key"
+        ]
+        
+        # Add suitable columns
+        if suitable_columns:
+            pk_options.insert(1, "--- Existing Columns ---")
+            pk_options.extend(suitable_columns)
+        
+        # Determine default selection
+        default_index = 0  # Default to auto-generated
+        if detected_pk and detected_pk in suitable_columns:
+            # If a suitable column was auto-detected, select it
+            default_index = pk_options.index(detected_pk)
+        
+        selected_pk = st.selectbox(
+            "Select primary key strategy",
+            options=pk_options,
+            index=default_index,
+            help="Choose how to uniquely identify each row"
+        )
+        
+        if selected_pk == "🔑 Auto-generated ID (Recommended)":
+            st.session_state.wizard_data['primary_key'] = "__Auto__" 
+            st.success("✓ An auto-incrementing 'id' column will be added to your table")
+            st.caption("Each row will get a unique sequential number (1, 2, 3, ...)")
+            
+        elif selected_pk == "⊘ No primary key":
+            st.session_state.wizard_data['primary_key'] = "__None__"  
+            st.error("⚠ Not recommended: Table will have no primary key")
+            st.caption("This may cause issues with data integrity and updates")
+            
+        elif selected_pk == "--- Existing Columns ---":
+            st.info("Please select a specific column or use auto-generated ID")
+            
+        else:
+            st.session_state.wizard_data['primary_key'] = selected_pk
+            st.success(f"✓ Primary key: **{selected_pk}**")
+            
+            selected_stat = next((s for s in stats if s['name'] == selected_pk), None)
+            if selected_stat:
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Unique Values", f"{selected_stat['uniqueness_percent']}%")
+                with col2:
+                    st.metric("Null Count", selected_stat['null_count'])
+                with col3:
+                    st.metric("Total Rows", selected_stat['total_rows'])
+                
+                if selected_stat['suitable_for_pk']:
+                    st.success(f"✓ Primary key: **{selected_pk}**")
+                else:
+                    st.warning(f"⚠ **{selected_pk}** may not be suitable as primary key")
+                    if selected_stat['has_nulls']:
+                        st.caption("Contains null values")
+                    if not selected_stat['is_unique']:
+                        st.caption("Contains duplicate values")
+        
+        st.markdown("---")
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("← Back"):
+                prev_step()
+                st.rerun()
+        with col2:
+            if st.button("Next: Foreign Keys →", type="primary"):
+                next_step()
+                st.rerun()
+
+    
+
+    elif current_step == 5:
+        st.subheader("Step 5: Configure Foreign Keys (Optional)")
+        
+        st.info("Foreign keys link this table to other tables in your database.")
+        
+        schema = st.session_state.wizard_data.get('schema', {})
+        
+        if 'foreign_keys' not in st.session_state.wizard_data:
+            st.session_state.wizard_data['foreign_keys'] = []
+        
+        foreign_keys = st.session_state.wizard_data['foreign_keys']
+        
+        column_names = [col['name'] for col in schema.get('columns', [])]
+        
+        st.markdown("#### Current Foreign Keys")
+        
+        if not foreign_keys:
+            st.caption("No foreign keys defined")
+        else:
+            for i, fk in enumerate(foreign_keys):
+                col1, col2, col3, col4 = st.columns([3, 3, 3, 1])
+                
+                with col1:
+                    st.text(f"{fk['column']}")
+                with col2:
+                    st.text(f"→ {fk['ref_table']}")
+                with col3:
+                    st.text(f".{fk['ref_column']}")
+                with col4:
+                    if st.button("🗑️", key=f"remove_fk_{i}"):
+                        foreign_keys.pop(i)
+                        st.rerun()
+        
+        st.markdown("---")
+        st.markdown("#### Add Foreign Key")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            fk_column = st.selectbox(
+                "Column in this table",
+                options=[""] + column_names,
+                key="new_fk_column"
+            )
+        
+        with col2:
+            fk_ref_table = st.text_input(
+                "References table",
+                placeholder="e.g., patients",
+                key="new_fk_ref_table"
+            )
+        
+        with col3:
+            fk_ref_column = st.text_input(
+                "References column",
+                value="id",
+                placeholder="e.g., id",
+                key="new_fk_ref_column"
+            )
+        
+        if st.button("Validate & Add Foreign Key"):
+            if not fk_column or not fk_ref_table or not fk_ref_column:
+                st.error("All fields are required")
+            else:
+                with st.spinner("Validating foreign key..."):
+                    try:
+                        data = {
+                            "ref_table": fk_ref_table,
+                            "ref_column": fk_ref_column
+                        }
+                        
+                        response = requests.post(
+                            f"{BACKEND_URL}/api/upload/validate-foreign-key",
+                            data=data,
+                            timeout=10
+                        )
+                        
+                        if response.status_code == 200:
+                            result = response.json()
+                            
+                            if result.get('valid'):
+                                # Add FK
+                                foreign_keys.append({
+                                    "column": fk_column,
+                                    "ref_table": fk_ref_table,
+                                    "ref_column": fk_ref_column
+                                })
+                                st.success(result.get('message'))
+                                st.rerun()
+                            else:
+                                st.error(result.get('error'))
+                                if result.get('available_columns'):
+                                    st.info(f"Available columns: {', '.join(result['available_columns'])}")
+                        else:
+                            st.error(f"Validation failed: {response.text}")
+                    except Exception as e:
+                        st.error(f"Error: {str(e)}")
+        
+        st.markdown("---")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            if st.button("← Back"):
+                prev_step()
+                st.rerun()
+        with col2:
+            if st.button("Skip Foreign Keys", type="secondary"):
+                st.session_state.wizard_data['foreign_keys'] = []
+                next_step()
+                st.rerun()
+        with col3:
+            if st.button("Next: Confirm →", type="primary"):
+                next_step()
+                st.rerun()
+    
+    elif current_step == 6:
+        st.subheader("Step 6: Review & Confirm")
+        
+        wizard_data = st.session_state.wizard_data
+        schema = wizard_data.get('schema', {})
+        
+        st.markdown("#### Upload Summary")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("**File:**")
+            st.text(wizard_data.get('filename', 'N/A'))
+            
+            st.markdown("**Table Name:**")
+            st.text(wizard_data.get('table_name', 'N/A'))
+            
+            st.markdown("**Rows:**")
+            st.text(schema.get('row_count', 0))
+        
+        with col2:
+            st.markdown("**Primary Key:**")
+            pk = wizard_data.get('primary_key', '')
+            st.text(pk if pk else "(None)")
+            
+            st.markdown("**Foreign Keys:**")
+            fks = wizard_data.get('foreign_keys', [])
+            if fks:
+                for fk in fks:
+                    st.text(f"{fk['column']} → {fk['ref_table']}.{fk['ref_column']}")
+            else:
+                st.text("(None)")
+        
+        st.markdown("---")
+        st.markdown("#### Generated SQL")
+        
+        try:
+            uploaded_file = wizard_data['file']
+            uploaded_file.seek(0)
+            
+            header_row = wizard_data.get('header_row', 0)
+            skip_rows_str = ",".join(map(str, range(header_row))) if header_row > 0 else None
+            
+            import json
+            files = {"file": (uploaded_file.name, uploaded_file.read(), "text/csv")}
+            data = {
+                "header_row": header_row,
+                "skip_rows": skip_rows_str,
+                "primary_key": wizard_data.get('primary_key', ''),
+                "foreign_keys": json.dumps(wizard_data.get('foreign_keys', []))
+            }
+            
+            response = requests.post(
+                f"{BACKEND_URL}/api/upload/analyze",
+                files=files,
+                data=data,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                final_schema = response.json()
+                st.code(final_schema.get('create_sql', ''), language='sql')
+            else:
+                st.error("Failed to generate SQL preview")
+        
+        except Exception as e:
+            st.error(f"Error generating preview: {str(e)}")
+        
+        st.markdown("---")
+        
         if_exists = st.selectbox(
             "If table exists:",
             ["fail", "replace", "append"],
-            help="fail: Error if exists | replace: Drop and recreate | append: Add data to existing"
+            help="fail: Error if exists | replace: Drop and recreate | append: Add rows"
         )
-    
-    if uploaded_file is not None:
-        st.success(f"File selected: **{uploaded_file.name}**")
-        st.caption(f"Size: {uploaded_file.size:,} bytes")
         
+        st.markdown("---")
+        col1, col2, col3 = st.columns(3)
         
-        if st.checkbox("Preview CSV content"):
-            try:
-                preview_df = pd.read_csv(uploaded_file)
-                st.dataframe(preview_df.head(10))
-                uploaded_file.seek(0) 
-            except Exception as e:
-                st.error(f"Error reading CSV: {e}")
+        with col1:
+            if st.button("← Back"):
+                prev_step()
+                st.rerun()
         
-        if st.button("Upload and Process", type="primary"):
-            with st.spinner("Processing CSV file..."):
-                try:
-                    
-                    files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "text/csv")}
-                    data = {
-                        "table_name": custom_table_name if custom_table_name else "",
-                        "if_exists": if_exists
-                    }
-                    
-                    
-                    response = requests.post(
-                        f"{BACKEND_URL}/api/upload/",
-                        files=files,
-                        data=data,
-                        timeout=60
-                    )
-                    
-                    if response.status_code == 200:
-                        result = response.json()
+        with col2:
+            if st.button("Start Over", type="secondary"):
+                reset_wizard()
+                st.rerun()
+        
+        with col3:
+            if st.button("Upload to Database", type="primary"):
+                with st.spinner("Uploading..."):
+                    try:
+                        wizard_data = st.session_state.wizard_data
+                        uploaded_file = wizard_data['file']
+                        uploaded_file.seek(0)
                         
-                        st.markdown('<div class="success-box">', unsafe_allow_html=True)
-                        st.success("CSV uploaded and processed successfully!")
-                        st.markdown('</div>', unsafe_allow_html=True)
-                        col1, col2, col3 = st.columns(3)
-                        with col1:
-                            st.metric("Table Name", result['table_name'])
-                        with col2:
-                            st.metric("Rows Inserted", result['rows_inserted'])
-                        with col3:
-                            st.metric("Columns", len(result['schema']['columns']))
+                        header_row = wizard_data.get('header_row', 0)
+                        skip_rows_str = ",".join(map(str, range(header_row))) if header_row > 0 else None
                         
+                        pk = wizard_data.get('primary_key')
                         
-                        with st.expander("View Detected Schema"):
-                            st.json(result['schema'])
+                        if pk == "__AUTO__":
+                            pk_to_send = ""  
+                        elif pk == "__NONE__":
+                            pk_to_send = "NONE" 
+                        elif pk is None:
+                            pk_to_send = ""  
+                        else:
+                            pk_to_send = pk 
                         
+                        import json
+                        files = {"file": (uploaded_file.name, uploaded_file.read(), "text/csv")}
+                        data = {
+                            "table_name": wizard_data.get('table_name'),
+                            "if_exists": if_exists,
+                            "header_row": header_row,
+                            "skip_rows": skip_rows_str,
+                            "primary_key": pk_to_send,  
+                            "foreign_keys": json.dumps(wizard_data.get('foreign_keys', []))
+                        }
                         
-                        with st.expander("View Generated SQL"):
-                            st.code(result['schema']['create_sql'], language='sql')
+                        response = requests.post(
+                            f"{BACKEND_URL}/api/upload/",
+                            files=files,
+                            data=data,
+                            timeout=120
+                        )
                         
-                        
-                        if result['schema'].get('sample_data'):
-                            with st.expander("View Sample Data"):
-                                st.dataframe(pd.DataFrame(result['schema']['sample_data']))
-                        
-                    else:
-                        st.markdown('<div class="error-box">', unsafe_allow_html=True)
-                        st.error(f"Upload failed: {response.status_code}")
-                        st.write(response.text)
-                        st.markdown('</div>', unsafe_allow_html=True)
-                        
-                except Exception as e:
-                    st.markdown('<div class="error-box">', unsafe_allow_html=True)
-                    st.error(f"Error: {str(e)}")
-                    st.markdown('</div>', unsafe_allow_html=True)
+                        if response.status_code == 200:
+                            result = response.json()
+                            
+                            st.balloons()
+                            st.success(f"✓ Successfully uploaded {result['rows_inserted']} rows to '{result['table_name']}'!")
+                            
+                            
+                            reset_wizard()
+                            
+                            st.info("You can now query this data in the 'Query Data' page")
+                            
+                            if st.button("Upload Another File"):
+                                st.rerun()
+                        else:
+                            st.error(f"Upload failed: {response.text}")
+                            
+                    except Exception as e:
+                        st.error(f"Error: {str(e)}")
 
 
 elif page == "Query Data":

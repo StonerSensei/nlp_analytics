@@ -3,6 +3,7 @@ from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import NullPool
 from typing import Generator
 import logging
+from typing import Dict
 
 from app.config import settings
 
@@ -98,29 +99,47 @@ def table_exists(table_name: str) -> bool:
         return False
 
 
-def get_table_info(table_name: str) -> dict:
-    """Get information about a specific table"""
+def get_table_info(table_name: str) -> Dict:
+    """Get table information"""
     try:
         inspector = inspect(engine)
         
-        if not table_exists(table_name):
-            return {"error": f"Table '{table_name}' does not exist"}
+        columns = []
+        for col in inspector.get_columns(table_name):
+            columns.append({
+                "name": col['name'],
+                "type": str(col['type']),  
+                "nullable": col['nullable'],
+                "default": str(col['default']) if col['default'] is not None else None
+            })
         
-        columns = inspector.get_columns(table_name)
         pk_constraint = inspector.get_pk_constraint(table_name)
-        foreign_keys = inspector.get_foreign_keys(table_name)
-        indexes = inspector.get_indexes(table_name)
+        primary_keys = pk_constraint.get('constrained_columns', []) if pk_constraint else []
+        
+        fks = []
+        for fk in inspector.get_foreign_keys(table_name):
+            fks.append({
+                "constrained_columns": fk['constrained_columns'],
+                "referred_table": fk['referred_table'],
+                "referred_columns": fk['referred_columns']
+            })
         
         return {
             "table_name": table_name,
             "columns": columns,
-            "primary_keys": pk_constraint.get('constrained_columns', []),
-            "foreign_keys": foreign_keys,
-            "indexes": indexes
+            "primary_keys": primary_keys,
+            "foreign_keys": fks
         }
+        
     except Exception as e:
-        logger.error(f"Error getting table info: {e}")
-        return {"error": str(e)}
+        logger.error(f"Error getting table info for {table_name}: {e}")
+        return {
+            "table_name": table_name,
+            "columns": [],
+            "primary_keys": [],
+            "foreign_keys": []
+        }
+
 
 
 def execute_raw_query(query: str, params: dict = None) -> list:

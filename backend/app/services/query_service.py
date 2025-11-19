@@ -17,20 +17,11 @@ class QueryService:
         self.ollama = ollama_service
     
     def generate_database_schema_context(self, table_name: Optional[str] = None) -> str:
-        """
-        Generate a comprehensive schema description for the LLM
-        
-        Args:
-            table_name: Optional specific table to include (filters schema to single table)
-        
-        Returns:
-            String containing database schema information
-        """
+        """Generate a comprehensive schema description for the LLM"""
         try:
             inspector = inspect(self.engine)
             tables = inspector.get_table_names()
             
-            # Filter to specific table if requested
             if table_name:
                 if table_name in tables:
                     tables = [table_name]
@@ -42,12 +33,15 @@ class QueryService:
             
             schema_parts = []
             
+            schema_parts.append("IMPORTANT: Use these EXACT table names (do not pluralize or modify):")
             for table in tables:
-                # Get columns
+                schema_parts.append(f'  - "{table}"')
+            schema_parts.append("")  
+            
+            for table in tables:
                 columns = inspector.get_columns(table)
                 pk_constraint = inspector.get_pk_constraint(table)
                 foreign_keys = inspector.get_foreign_keys(table)
-                
                 
                 col_defs = []
                 for col in columns:
@@ -56,11 +50,9 @@ class QueryService:
                         col_def += " NOT NULL"
                     col_defs.append(col_def)
                 
-                
                 if pk_constraint and pk_constraint.get('constrained_columns'):
                     pk_cols = ', '.join(pk_constraint['constrained_columns'])
                     col_defs.append(f"PRIMARY KEY ({pk_cols})")
-                
                 
                 for fk in foreign_keys:
                     fk_cols = ', '.join(fk['constrained_columns'])
@@ -68,7 +60,7 @@ class QueryService:
                     ref_cols = ', '.join(fk['referred_columns'])
                     col_defs.append(f"FOREIGN KEY ({fk_cols}) REFERENCES {ref_table}({ref_cols})")
                 
-                table_schema = f"CREATE TABLE {table} (\n    " + ",\n    ".join(col_defs) + "\n);"
+                table_schema = f'CREATE TABLE "{table}" (\n    ' + ",\n    ".join(col_defs) + "\n);"
                 schema_parts.append(table_schema)
             
             return "\n\n".join(schema_parts)
@@ -76,6 +68,7 @@ class QueryService:
         except Exception as e:
             logger.error(f"Error generating schema context: {e}")
             return "Error retrieving database schema."
+
 
     
     def query_from_natural_language(
@@ -156,21 +149,15 @@ class QueryService:
             }
     
     def _execute_generated_query(self, sql: str) -> Dict:
-        """
-        Safely execute a generated SQL query
-        
-        Args:
-            sql: SQL query to execute
-        
-        Returns:
-            Dict with execution results
-        """
+        """Safely execute a generated SQL query"""
         try:
             if not sql.strip().upper().startswith('SELECT'):
                 return {
                     "executed": False,
                     "error": "Only SELECT queries are allowed for safety"
                 }
+            
+            sql = self._fix_table_names_in_sql(sql)
             
             with self.engine.connect() as conn:
                 result = conn.execute(text(sql))
@@ -187,7 +174,7 @@ class QueryService:
                     "row_count": len(data),
                     "columns": columns,
                     "data": data,
-                    "execution_time_ms": None  
+                    "execution_time_ms": None
                 }
                 
         except SQLAlchemyError as e:
@@ -197,50 +184,83 @@ class QueryService:
                 "error": f"Query execution failed: {str(e)}",
                 "suggestion": "The generated SQL might be invalid. Try rephrasing your question."
             }
+
+    def _fix_table_names_in_sql(self, sql: str) -> str:
+        """Fix common table name mistakes in generated SQL"""
+        try:
+            import re
+            inspector = inspect(self.engine)
+            actual_tables = inspector.get_table_names()
+            
+            logger.info(f"Original SQL: {sql}")
+            
+            for actual_table in actual_tables:
+                wrong_plural = actual_table + 's'
+                
+                replacements = [
+                    (f'"{wrong_plural}"', f'"{actual_table}"'),      
+                    (f' {wrong_plural} ', f' "{actual_table}" '),     
+                    (f' {wrong_plural};', f' "{actual_table}";'),     
+                    (f'FROM {wrong_plural}', f'FROM "{actual_table}"'),
+                    (f'JOIN {wrong_plural}', f'JOIN "{actual_table}"'),
+                ]
+                
+                for old, new in replacements:
+                    if old in sql:
+                        sql = sql.replace(old, new)
+                        logger.warning(f"Fixed: {old} → {new}")
+            
+            logger.info(f"Fixed SQL: {sql}")
+            return sql
+            
+        except Exception as e:
+            logger.error(f"Error fixing table names: {e}")
+            return sql
+
+
+
+
+
     
     def suggest_questions(self) -> List[str]:
-        """
-        Generate suggested questions based on database schema
-        
-        Returns:
-            List of suggested questions
-        """
+        """Generate suggested questions based on database schema"""
         try:
             tables = get_all_tables()
             
             if not tables:
                 return ["Upload some CSV files first to get started!"]
             
-            suggestions = [
-                f"How many records are in the {tables[0]} table?",
-                f"Show me the first 10 rows from {tables[0]}",
-            ]
+            suggestions = []
             
-            for table in tables[:3]: 
-                table_info = get_table_info(table)
-                if table_info and 'columns' in table_info:
-                    columns = [col['name'] for col in table_info['columns']]
-                    
-                   
-                    suggestions.append(f"Count all records in {table}")
-                    
-                  
-                    string_cols = [col['name'] for col in table_info['columns'] 
-                                 if 'VARCHAR' in str(col['type']) or 'TEXT' in str(col['type'])]
-                    if string_cols:
-                        suggestions.append(f"Group {table} by {string_cols[0]}")
-                    
-                   
-                    numeric_cols = [col['name'] for col in table_info['columns']
-                                  if 'INT' in str(col['type']) or 'FLOAT' in str(col['type'])]
-                    if numeric_cols and len(numeric_cols) > 1:
-                        suggestions.append(f"Show {table} ordered by {numeric_cols[0]} descending")
+            for table in tables[:3]:
+                
+                suggestions.append(f"Show first 10 rows from {table}")
+                suggestions.append(f"How many records are in {table}?")
+                
+                
+                try:
+                    table_info = get_table_info(table)
+                    if table_info and table_info.get('columns'):
+                        columns = table_info['columns']
+                        
+                        string_cols = [col['name'] for col in columns 
+                                    if 'VARCHAR' in str(col.get('type', '')) or 'TEXT' in str(col.get('type', ''))]
+                        if string_cols:
+                            suggestions.append(f"Group {table} by {string_cols[0]}")
+                        
+                        numeric_cols = [col['name'] for col in columns
+                                    if 'INT' in str(col.get('type', '')) or 'FLOAT' in str(col.get('type', ''))]
+                        if numeric_cols:
+                            suggestions.append(f"Show average {numeric_cols[0]} from {table}")
+                except:
+                    pass 
             
-            return suggestions[:10]  
+            return suggestions[:10]
             
         except Exception as e:
             logger.error(f"Error generating suggestions: {e}")
             return ["What data do you have?"]
+
     
     def get_query_stats(self) -> Dict:
         """Get statistics about the database for context"""

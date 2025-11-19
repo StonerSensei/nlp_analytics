@@ -84,9 +84,9 @@ async def get_table_sample(
 
 @router.post("/query")
 async def execute_query(query: str, db: Session = Depends(get_db)):
-    """
-    Execute a raw SQL query (SELECT only)
-    
+    """                                                                             
+    Execute a raw SQL query (SELECT only)                       
+                                                                                                                
     **WARNING:** Use with caution
     """
     try:
