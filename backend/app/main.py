@@ -732,3 +732,74 @@ def top_services():
         return {"data": [dict(zip(columns, row)) for row in rows]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+@app.get("/analytics/service-comparison")
+def service_comparison(patient_name: str = ""):
+    """Query 7: Service Comparison - HIS vs RIS side by side"""
+    try:
+        with engine.connect() as conn:
+            # Base query - join HIS and RIS on bill_id = patient_id
+            base_query = """
+                SELECT 
+                    COALESCE(h.bill_id, r.patient_id) as id,
+                    COALESCE(h.patient_name, r.patient) as patient_name,
+                    h.patient_name as his_patient_name,
+                    r.patient as ris_patient_name,
+                    STRING_AGG(DISTINCT h.service_description, ' | ') as his_services,
+                    STRING_AGG(DISTINCT r.test_name, ' | ') as ris_services,
+                    COUNT(DISTINCT h.id) as his_service_count,
+                    COUNT(DISTINCT r.id) as ris_service_count
+                FROM his h
+                FULL OUTER JOIN ris r ON h.bill_id = r.patient_id
+            """
+            
+            # Add filter if patient name provided
+            if patient_name:
+                base_query += """
+                WHERE LOWER(h.patient_name) LIKE LOWER(:pattern) 
+                   OR LOWER(r.patient) LIKE LOWER(:pattern)
+                """
+                result = conn.execute(
+                    text(base_query + """
+                        GROUP BY h.bill_id, r.patient_id, h.patient_name, r.patient
+                        ORDER BY patient_name
+                    """),
+                    {"pattern": f"%{patient_name}%"}
+                )
+            else:
+                result = conn.execute(text(base_query + """
+                    GROUP BY h.bill_id, r.patient_id, h.patient_name, r.patient
+                    ORDER BY patient_name
+                    LIMIT 100
+                """))
+            
+            rows = result.fetchall()
+            columns = result.keys()
+        
+        return {"data": [dict(zip(columns, row)) for row in rows]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/analytics/patient-search")
+def patient_search(query: str):
+    """Search for patients by name across both tables"""
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text("""
+                SELECT DISTINCT 
+                    COALESCE(h.patient_name, r.patient) as patient_name,
+                    COALESCE(h.bill_id, r.patient_id) as patient_id
+                FROM his h
+                FULL OUTER JOIN ris r ON h.bill_id = r.patient_id
+                WHERE LOWER(h.patient_name) LIKE LOWER(:pattern)
+                   OR LOWER(r.patient) LIKE LOWER(:pattern)
+                ORDER BY patient_name
+                LIMIT 50
+            """), {"pattern": f"%{query}%"})
+            
+            rows = result.fetchall()
+            columns = result.keys()
+        
+        return {"data": [dict(zip(columns, row)) for row in rows]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

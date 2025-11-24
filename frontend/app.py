@@ -334,13 +334,14 @@ elif page == "Analytics Dashboard":
     st.info("Click on any analysis button to view results and visualizations")
     
     # Create tabs for different analyses
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
         "Records Comparison",
         "Services per Patient", 
         "Missing in RIS",
         "Service Mismatch",
         "Daily Trends",
-        "Top Services"
+        "Top Services",
+        "Service Comparison"
     ])
     
     # TAB 1: Records Comparison
@@ -668,6 +669,164 @@ elif page == "Analytics Dashboard":
                         st.error("Failed to load data")
                 except Exception as e:
                     st.error(f"Error: {str(e)}")
+
+    with tab7:
+        st.subheader("HIS vs RIS Service Comparison by Patient")
+        st.markdown("Compare service names/descriptions between HIS and RIS files for each patient")
+        
+        # Search bar
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            search_query = st.text_input(
+                "Search Patient Name",
+                placeholder="Enter patient name (e.g., Liladhar, Gopal, etc.)",
+                key="patient_search"
+            )
+        with col2:
+            search_btn = st.button("Search", type="primary", key="search_patient_btn")
+            show_all = st.button("Show All (Top 100)", key="show_all_btn")
+        
+        # Load data based on search or show all
+        if search_btn or show_all or search_query:
+            with st.spinner("Loading patient data..."):
+                try:
+                    # Determine which mode
+                    if show_all:
+                        search_param = ""
+                    else:
+                        search_param = search_query if search_query else ""
+                    
+                    response = requests.get(
+                        f"{BACKEND_URL}/analytics/service-comparison",
+                        params={"patient_name": search_param}
+                    )
+                    
+                    if response.status_code == 200:
+                        data = response.json()['data']
+                        
+                        if data:
+                            df = pd.DataFrame(data)
+                            
+                            # Summary metrics
+                            col1, col2, col3, col4 = st.columns(4)
+                            with col1:
+                                st.metric("Total Patients", len(df))
+                            with col2:
+                                matching = df[df['his_service_count'] == df['ris_service_count']].shape[0]
+                                st.metric("Matching Counts", matching)
+                            with col3:
+                                mismatched = df[df['his_service_count'] != df['ris_service_count']].shape[0]
+                                st.metric("Mismatched Counts", mismatched, delta_color="inverse")
+                            with col4:
+                                missing = df[(df['his_services'].isna()) | (df['ris_services'].isna())].shape[0]
+                                st.metric("Missing in One File", missing, delta_color="inverse")
+                            
+                            st.markdown("---")
+                            
+                            # Display options
+                            display_mode = st.radio(
+                                "Display Mode:",
+                                ["All Patients", "Mismatched Only", "Missing in One File"],
+                                horizontal=True
+                            )
+                            
+                            # Filter based on display mode
+                            if display_mode == "Mismatched Only":
+                                filtered_df = df[df['his_service_count'] != df['ris_service_count']]
+                            elif display_mode == "Missing in One File":
+                                filtered_df = df[(df['his_services'].isna()) | (df['ris_services'].isna())]
+                            else:
+                                filtered_df = df
+                            
+                            st.markdown(f"### Patient Service Comparison ({len(filtered_df)} records)")
+                            
+                            # Enhanced table display with styling
+                            for idx, row in filtered_df.iterrows():
+                                with st.expander(
+                                    f"👤 {row['patient_name']} - ID: {row['id']} "
+                                    f"(HIS: {row['his_service_count'] or 0} services | "
+                                    f"RIS: {row['ris_service_count'] or 0} services)"
+                                ):
+                                    col1, col2 = st.columns(2)
+                                    
+                                    with col1:
+                                        st.markdown("**HIS Services:**")
+                                        if row['his_services']:
+                                            services = row['his_services'].split(' | ')
+                                            for i, service in enumerate(services, 1):
+                                                st.markdown(f"{i}. {service}")
+                                        else:
+                                            st.warning("No services in HIS")
+                                    
+                                    with col2:
+                                        st.markdown("**RIS Services:**")
+                                        if row['ris_services']:
+                                            services = row['ris_services'].split(' | ')
+                                            for i, service in enumerate(services, 1):
+                                                st.markdown(f"{i}. {service}")
+                                        else:
+                                            st.warning("No services in RIS")
+                                    
+                                    # Highlight if counts don't match
+                                    if row['his_service_count'] != row['ris_service_count']:
+                                        st.error(f"Service count mismatch: HIS has {row['his_service_count']}, RIS has {row['ris_service_count']}")
+                            
+                            # Compact table view option
+                            st.markdown("---")
+                            if st.checkbox("Show Compact Table View"):
+                                # Create simplified dataframe
+                                display_df = filtered_df[[
+                                    'patient_name', 'id', 
+                                    'his_service_count', 'ris_service_count',
+                                    'his_services', 'ris_services'
+                                ]].copy()
+                                
+                                # Truncate long service lists for table
+                                display_df['his_services'] = display_df['his_services'].apply(
+                                    lambda x: (x[:100] + '...') if x and len(x) > 100 else x
+                                )
+                                display_df['ris_services'] = display_df['ris_services'].apply(
+                                    lambda x: (x[:100] + '...') if x and len(x) > 100 else x
+                                )
+                                
+                                st.dataframe(display_df, use_container_width=True)
+                            
+                            # Download button
+                            st.markdown("---")
+                            csv = filtered_df.to_csv(index=False)
+                            st.download_button(
+                                "Download Comparison Data",
+                                csv,
+                                f"service_comparison_{search_param or 'all'}.csv",
+                                "text/csv"
+                            )
+                        else:
+                            st.info(f"No patients found matching '{search_query}'")
+                            st.markdown("Try different search terms or click 'Show All'")
+                    else:
+                        st.error("Failed to load data")
+                except Exception as e:
+                    st.error(f"Error: {str(e)}")
+        else:
+            # Initial state - show instructions
+            st.info("Use the search bar above to find specific patients or click 'Show All' to see top 100 patients")
+            
+            st.markdown("""
+            ### How to Use:
+            
+            1. **Search by Patient Name**: Type part of the patient name and click Search
+            2. **Show All**: Display top 100 patients
+            3. **Compare Services**: See side-by-side comparison of HIS vs RIS service descriptions
+            4. **Filter Results**: Choose to show all, mismatched only, or missing records
+            5. **Download**: Export comparison data to CSV
+            
+            ### Why This is Useful:
+            
+            - **Identify spelling differences** between HIS and RIS service names
+            - **Find missing services** in either system
+            - **Validate data consistency** across both files
+            - **Spot data entry errors** by comparing service descriptions
+            """)
 
 
 
