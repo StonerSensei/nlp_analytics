@@ -22,7 +22,7 @@ with st.sidebar:
 if page == "Upload CSV":
     st.header("Upload CSV Files")
     
-    st.info("💡 Upload HIS.csv (skip 0 rows) and RIS.csv (skip 5 rows)")
+    st.info("Upload HIS.csv (skip 0 rows) and RIS.csv (skip 5 rows)")
     
     uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
     
@@ -43,8 +43,8 @@ if page == "Upload CSV":
                     
                     if response.status_code == 200:
                         result = response.json()
-                        st.success(f"✅ {result['message']}")
-                        st.info(f"📊 Rows: {result['rows']} | Columns: {len(result['columns'])}")
+                        st.success(f"{result['message']}")
+                        st.info(f"Rows: {result['rows']} | Columns: {len(result['columns'])}")
                         
                         with st.expander("View Columns"):
                             st.write(result['columns'])
@@ -59,7 +59,7 @@ if page == "Upload CSV":
 elif page == "Query Data":
     st.header("Natural Language Query")
     
-    with st.expander("💡 Example Queries"):
+    with st.expander("Example Queries"):
         st.markdown("""
         - Show me all patients from HIS table
         - Find patients with multiple services
@@ -89,7 +89,7 @@ elif page == "Query Data":
                             
                             # Download button
                             csv = df.to_csv(index=False)
-                            st.download_button("📥 Download CSV", csv, "query_results.csv", "text/csv")
+                            st.download_button("Download CSV", csv, "query_results.csv", "text/csv")
                         else:
                             st.info("No results found")
                     else:
@@ -114,7 +114,7 @@ elif page == "View Tables":
                 st.success(f"Found {len(tables)} table(s)")
                 
                 for table in tables:
-                    with st.expander(f"📊 {table['name'].upper()} ({table['row_count']} rows)"):
+                    with st.expander(f" {table['name'].upper()} ({table['row_count']} rows)"):
                         st.write("**Columns:**", ", ".join(table['columns']))
                         
                         # View data button
@@ -132,7 +132,7 @@ elif page == "View Tables":
                                         # Download button
                                         csv = df.to_csv(index=False)
                                         st.download_button(
-                                            "📥 Download CSV",
+                                            "Download CSV",
                                             csv,
                                             f"{table['name']}_data.csv",
                                             "text/csv",
@@ -154,7 +154,7 @@ elif page == "View Tables":
                         )
                         
                         # Delete button
-                        if st.button("🗑️ Delete Table", key=f"delete_{table['name']}"):
+                        if st.button("Delete Table", key=f"delete_{table['name']}"):
                             st.warning(f"Are you sure you want to delete {table['name']}?")
                             
                             col1, col2 = st.columns(2)
@@ -170,7 +170,7 @@ elif page == "View Tables":
                                 if st.button("Cancel", key=f"cancel_{table['name']}"):
                                     st.info("Delete cancelled")
             else:
-                st.info("📤 No tables found. Upload CSV files to get started.")
+                st.info("No tables found. Upload CSV files to get started.")
                 st.markdown("Go to **Upload CSV** page to upload HIS.csv and RIS.csv files.")
         else:
             st.error(f"Failed to connect to backend. Status code: {response.status_code}")
@@ -178,21 +178,21 @@ elif page == "View Tables":
             st.info("Make sure the backend service is running.")
     
     except requests.exceptions.ConnectionError:
-        st.error("❌ Cannot connect to backend API")
+        st.error("Cannot connect to backend API")
         st.info(f"Backend URL: {BACKEND_URL}")
         st.info("Please check if Docker containers are running: `docker-compose ps`")
     except Exception as e:
         st.error(f"Error: {str(e)}")
     
     # Manual refresh button
-    if st.button("🔄 Refresh", key="manual_refresh"):
+    if st.button("Refresh", key="manual_refresh"):
         st.rerun()
 
 # Execute SQL Page
 elif page == "Execute SQL":
     st.header("Execute SQL Query")
     
-    with st.expander("💡 Example SQL Queries"):
+    with st.expander("Example SQL Queries"):
         st.code("""
 -- Get all records from HIS
 SELECT * FROM his LIMIT 10;
@@ -222,13 +222,13 @@ WHERE r.patient_id IS NULL;
                         result = response.json()
                         
                         if 'results' in result:
-                            st.success(f"✅ Query executed successfully ({result['row_count']} rows)")
+                            st.success(f"Query executed successfully ({result['row_count']} rows)")
                             if result['results']:
                                 df = pd.DataFrame(result['results'])
                                 st.dataframe(df, use_container_width=True)
                                 
                                 csv = df.to_csv(index=False)
-                                st.download_button("📥 Download CSV", csv, "sql_results.csv", "text/csv")
+                                st.download_button("Download CSV", csv, "sql_results.csv", "text/csv")
                             else:
                                 st.info("Query returned no results")
                         else:
@@ -243,7 +243,7 @@ WHERE r.patient_id IS NULL;
 
 # Data Validation Page
 elif page == "Data Validation":
-    st.header("📊 Data Validation - HIS vs RIS")
+    st.header("Data Validation - HIS vs RIS")
     
     st.info("Compare patient records and services between HIS (Government) and RIS (Private) files")
     
@@ -257,7 +257,7 @@ elif page == "Data Validation":
                     summary = data['summary']
                     
                     # Summary Metrics
-                    st.subheader("📈 Summary")
+                    st.subheader("Summary")
                     col1, col2, col3, col4 = st.columns(4)
                     
                     with col1:
@@ -280,22 +280,22 @@ elif page == "Data Validation":
                     
                     # Missing Records
                     if summary['missing_in_ris_count'] > 0:
-                        st.subheader("⚠️ Bill IDs in HIS but NOT in RIS")
+                        st.subheader("Bill IDs in HIS but NOT in RIS")
                         st.error(f"Found {summary['missing_in_ris_count']} bill_ids missing in RIS file")
                         missing_df = pd.DataFrame({"Bill ID": data['missing_in_ris']})
                         st.dataframe(missing_df, use_container_width=True)
                         
                         csv = missing_df.to_csv(index=False)
-                        st.download_button("📥 Download Missing IDs", csv, "missing_in_ris.csv", "text/csv")
+                        st.download_button("Download Missing IDs", csv, "missing_in_ris.csv", "text/csv")
                     
                     if summary['missing_in_his_count'] > 0:
-                        st.subheader("⚠️ Patient IDs in RIS but NOT in HIS")
+                        st.subheader("Patient IDs in RIS but NOT in HIS")
                         st.warning(f"Found {summary['missing_in_his_count']} patient_ids missing in HIS file")
                         missing_df = pd.DataFrame({"Patient ID": data['missing_in_his']})
                         st.dataframe(missing_df, use_container_width=True)
                     
                     # Service Count Comparison
-                    st.subheader("🔍 Service Count Comparison")
+                    st.subheader("Service Count Comparison")
                     
                     col1, col2 = st.columns(2)
                     
@@ -311,15 +311,15 @@ elif page == "Data Validation":
                     
                     # Mismatched Records
                     if summary['mismatched_count'] > 0:
-                        st.subheader("❌ Mismatched Service Counts")
+                        st.subheader("Mismatched Service Counts")
                         st.error(f"Found {summary['mismatched_count']} patients with different service counts")
                         mismatch_df = pd.DataFrame(data['mismatched_records'])
                         st.dataframe(mismatch_df, use_container_width=True)
                         
                         csv = mismatch_df.to_csv(index=False)
-                        st.download_button("📥 Download Mismatches", csv, "mismatched_services.csv", "text/csv")
+                        st.download_button("Download Mismatches", csv, "mismatched_services.csv", "text/csv")
                     else:
-                        st.success("✅ All patients have matching service counts between HIS and RIS!")
+                        st.success("All patients have matching service counts between HIS and RIS!")
                     
                 else:
                     st.error(f"Validation failed: {response.json().get('detail', 'Unknown error')}")
@@ -329,25 +329,25 @@ elif page == "Data Validation":
 
 # Analytics Dashboard Page
 elif page == "Analytics Dashboard":
-    st.header("📊 Analytics Dashboard - HIS vs RIS Validation")
+    st.header("Analytics Dashboard - HIS vs RIS Validation")
     
     st.info("Click on any analysis button to view results and visualizations")
     
     # Create tabs for different analyses
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-        "📈 Records Comparison",
-        "👥 Services per Patient", 
-        "⚠️ Missing in RIS",
-        "❌ Service Mismatch",
-        "📅 Daily Trends",
-        "🏆 Top Services"
+        "Records Comparison",
+        "Services per Patient", 
+        "Missing in RIS",
+        "Service Mismatch",
+        "Daily Trends",
+        "Top Services"
     ])
     
     # TAB 1: Records Comparison
     with tab1:
         st.subheader("Total Records Comparison - HIS vs RIS")
         
-        if st.button("🔍 Load Records Comparison", key="btn_records"):
+        if st.button("Load Records Comparison", key="btn_records"):
             with st.spinner("Loading data..."):
                 try:
                     response = requests.get(f"{BACKEND_URL}/analytics/records-comparison")
@@ -368,7 +368,7 @@ elif page == "Analytics Dashboard":
                             st.metric("RIS Unique Patient IDs", ris_data['unique_ids'])
                         
                         # Bar chart visualization
-                        st.markdown("### 📊 Visual Comparison")
+                        st.markdown("### Visual Comparison")
                         
                         import plotly.graph_objects as go
                         
@@ -386,12 +386,12 @@ elif page == "Analytics Dashboard":
                         st.plotly_chart(fig, use_container_width=True)
                         
                         # Data table
-                        st.markdown("### 📋 Data Table")
+                        st.markdown("### Data Table")
                         st.dataframe(df, use_container_width=True)
                         
                         # Download
                         csv = df.to_csv(index=False)
-                        st.download_button("📥 Download CSV", csv, "records_comparison.csv", "text/csv")
+                        st.download_button("Download CSV", csv, "records_comparison.csv", "text/csv")
                     else:
                         st.error("Failed to load data")
                 except Exception as e:
@@ -401,7 +401,7 @@ elif page == "Analytics Dashboard":
     with tab2:
         st.subheader("Services per Patient (Top 100)")
         
-        if st.button("🔍 Load Services Analysis", key="btn_services"):
+        if st.button("Load Services Analysis", key="btn_services"):
             with st.spinner("Loading data..."):
                 try:
                     response = requests.get(f"{BACKEND_URL}/analytics/services-per-patient")
@@ -419,7 +419,7 @@ elif page == "Analytics Dashboard":
                             st.metric("Max Services", df['service_count'].max())
                         
                         # Bar chart - Top 20
-                        st.markdown("### 📊 Top 20 Patients by Service Count")
+                        st.markdown("### Top 20 Patients by Service Count")
                         
                         import plotly.express as px
                         
@@ -437,12 +437,12 @@ elif page == "Analytics Dashboard":
                         st.plotly_chart(fig, use_container_width=True)
                         
                         # Data table
-                        st.markdown("### 📋 Complete Data Table")
+                        st.markdown("### Complete Data Table")
                         st.dataframe(df, use_container_width=True)
                         
                         # Download
                         csv = df.to_csv(index=False)
-                        st.download_button("📥 Download CSV", csv, "services_per_patient.csv", "text/csv")
+                        st.download_button("Download CSV", csv, "services_per_patient.csv", "text/csv")
                     else:
                         st.error("Failed to load data")
                 except Exception as e:
@@ -452,7 +452,7 @@ elif page == "Analytics Dashboard":
     with tab3:
         st.subheader("Bill IDs in HIS but Missing in RIS")
         
-        if st.button("🔍 Find Missing Records", key="btn_missing"):
+        if st.button("Find Missing Records", key="btn_missing"):
             with st.spinner("Searching..."):
                 try:
                     response = requests.get(f"{BACKEND_URL}/analytics/missing-in-ris")
@@ -461,7 +461,7 @@ elif page == "Analytics Dashboard":
                         df = pd.DataFrame(data)
                         
                         if len(df) > 0:
-                            st.error(f"⚠️ Found {len(df)} bill IDs missing in RIS!")
+                            st.error(f"Found {len(df)} bill IDs missing in RIS!")
                             
                             # Metrics
                             col1, col2 = st.columns(2)
@@ -471,7 +471,7 @@ elif page == "Analytics Dashboard":
                                 st.metric("Total Missing Services", df['his_services'].sum())
                             
                             # Chart
-                            st.markdown("### 📊 Missing Services Distribution")
+                            st.markdown("### Missing Services Distribution")
                             
                             import plotly.express as px
                             
@@ -485,14 +485,14 @@ elif page == "Analytics Dashboard":
                             st.plotly_chart(fig, use_container_width=True)
                             
                             # Data table
-                            st.markdown("### 📋 Missing Records")
+                            st.markdown("### Missing Records")
                             st.dataframe(df, use_container_width=True)
                             
                             # Download
                             csv = df.to_csv(index=False)
-                            st.download_button("📥 Download Missing Records", csv, "missing_in_ris.csv", "text/csv")
+                            st.download_button("Download Missing Records", csv, "missing_in_ris.csv", "text/csv")
                         else:
-                            st.success("✅ No missing records! All HIS bill IDs exist in RIS.")
+                            st.success("No missing records! All HIS bill IDs exist in RIS.")
                     else:
                         st.error("Failed to load data")
                 except Exception as e:
@@ -502,7 +502,7 @@ elif page == "Analytics Dashboard":
     with tab4:
         st.subheader("Patients with Different Service Counts")
         
-        if st.button("🔍 Find Mismatches", key="btn_mismatch"):
+        if st.button("Find Mismatches", key="btn_mismatch"):
             with st.spinner("Comparing..."):
                 try:
                     response = requests.get(f"{BACKEND_URL}/analytics/service-mismatch")
@@ -511,7 +511,7 @@ elif page == "Analytics Dashboard":
                         df = pd.DataFrame(data)
                         
                         if len(df) > 0:
-                            st.error(f"❌ Found {len(df)} patients with mismatched service counts!")
+                            st.error(f"Found {len(df)} patients with mismatched service counts!")
                             
                             # Metrics
                             col1, col2, col3 = st.columns(3)
@@ -523,7 +523,7 @@ elif page == "Analytics Dashboard":
                                 st.metric("Max Difference", df['difference'].max())
                             
                             # Chart
-                            st.markdown("### 📊 HIS vs RIS Service Count Comparison")
+                            st.markdown("### HIS vs RIS Service Count Comparison")
                             
                             import plotly.graph_objects as go
                             
@@ -544,14 +544,14 @@ elif page == "Analytics Dashboard":
                             st.plotly_chart(fig, use_container_width=True)
                             
                             # Data table
-                            st.markdown("### 📋 Mismatch Details")
+                            st.markdown("### Mismatch Details")
                             st.dataframe(df, use_container_width=True)
                             
                             # Download
                             csv = df.to_csv(index=False)
-                            st.download_button("📥 Download Mismatches", csv, "service_mismatches.csv", "text/csv")
+                            st.download_button("Download Mismatches", csv, "service_mismatches.csv", "text/csv")
                         else:
-                            st.success("✅ All patients have matching service counts!")
+                            st.success("All patients have matching service counts!")
                     else:
                         st.error("Failed to load data")
                 except Exception as e:
@@ -561,7 +561,7 @@ elif page == "Analytics Dashboard":
     with tab5:
         st.subheader("Daily Service Trends")
         
-        if st.button("🔍 Load Daily Trends", key="btn_trends"):
+        if st.button("Load Daily Trends", key="btn_trends"):
             with st.spinner("Loading trends..."):
                 try:
                     response = requests.get(f"{BACKEND_URL}/analytics/daily-trends")
@@ -579,7 +579,7 @@ elif page == "Analytics Dashboard":
                             st.metric("Peak Day Services", df['total_services'].max())
                         
                         # Line chart
-                        st.markdown("### 📈 Daily Service Trends")
+                        st.markdown("### Daily Service Trends")
                         
                         import plotly.express as px
                         
@@ -595,12 +595,12 @@ elif page == "Analytics Dashboard":
                         st.plotly_chart(fig, use_container_width=True)
                         
                         # Data table
-                        st.markdown("### 📋 Daily Data")
+                        st.markdown("### Daily Data")
                         st.dataframe(df, use_container_width=True)
                         
                         # Download
                         csv = df.to_csv(index=False)
-                        st.download_button("📥 Download Trends", csv, "daily_trends.csv", "text/csv")
+                        st.download_button("Download Trends", csv, "daily_trends.csv", "text/csv")
                     else:
                         st.error("Failed to load data")
                 except Exception as e:
@@ -610,7 +610,7 @@ elif page == "Analytics Dashboard":
     with tab6:
         st.subheader("Top 20 Most Used Services")
         
-        if st.button("🔍 Load Top Services", key="btn_top"):
+        if st.button("Load Top Services", key="btn_top"):
             with st.spinner("Loading services..."):
                 try:
                     response = requests.get(f"{BACKEND_URL}/analytics/top-services")
@@ -628,7 +628,7 @@ elif page == "Analytics Dashboard":
                             st.metric("Usage Count", df.iloc[0]['count'])
                         
                         # Horizontal bar chart
-                        st.markdown("### 📊 Top 20 Services by Usage")
+                        st.markdown("### Top 20 Services by Usage")
                         
                         import plotly.express as px
                         
@@ -646,7 +646,7 @@ elif page == "Analytics Dashboard":
                         st.plotly_chart(fig, use_container_width=True)
                         
                         # Pie chart for unique patients
-                        st.markdown("### 🥧 Unique Patients Distribution (Top 10)")
+                        st.markdown("### Unique Patients Distribution (Top 10)")
                         
                         top_10 = df.head(10)
                         fig2 = px.pie(
@@ -658,12 +658,12 @@ elif page == "Analytics Dashboard":
                         st.plotly_chart(fig2, use_container_width=True)
                         
                         # Data table
-                        st.markdown("### 📋 Service Details")
+                        st.markdown("### Service Details")
                         st.dataframe(df, use_container_width=True)
                         
                         # Download
                         csv = df.to_csv(index=False)
-                        st.download_button("📥 Download Services", csv, "top_services.csv", "text/csv")
+                        st.download_button("Download Services", csv, "top_services.csv", "text/csv")
                     else:
                         st.error("Failed to load data")
                 except Exception as e:
@@ -673,6 +673,6 @@ elif page == "Analytics Dashboard":
 
 # Footer
 st.markdown("---")
-st.markdown("🏥 Built for Hospital Data Analysis | NLP to SQL with Ollama SQLCoder")
+st.markdown("Built for Hospital Data Analysis | NLP to SQL with Ollama SQLCoder")
 
 
