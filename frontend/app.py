@@ -333,7 +333,6 @@ elif page == "Analytics Dashboard":
     
     st.info("Click on any analysis button to view results and visualizations")
     
-    # Create tabs for different analyses
     tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
         "Records Comparison",
         "Services per Patient", 
@@ -356,7 +355,6 @@ elif page == "Analytics Dashboard":
                         data = response.json()['data']
                         df = pd.DataFrame(data)
                         
-                        # Display metrics
                         col1, col2 = st.columns(2)
                         with col1:
                             his_data = df[df['source'] == 'HIS'].iloc[0]
@@ -368,7 +366,6 @@ elif page == "Analytics Dashboard":
                             st.metric("RIS Total Records", ris_data['total_records'])
                             st.metric("RIS Unique Patient IDs", ris_data['unique_ids'])
                         
-                        # Bar chart visualization
                         st.markdown("### Visual Comparison")
                         
                         import plotly.graph_objects as go
@@ -386,11 +383,9 @@ elif page == "Analytics Dashboard":
                         )
                         st.plotly_chart(fig, use_container_width=True)
                         
-                        # Data table
                         st.markdown("### Data Table")
                         st.dataframe(df, use_container_width=True)
                         
-                        # Download
                         csv = df.to_csv(index=False)
                         st.download_button("Download CSV", csv, "records_comparison.csv", "text/csv")
                     else:
@@ -410,7 +405,6 @@ elif page == "Analytics Dashboard":
                         data = response.json()['data']
                         df = pd.DataFrame(data)
                         
-                        # Summary metrics
                         col1, col2, col3 = st.columns(3)
                         with col1:
                             st.metric("Total Patients", len(df))
@@ -419,7 +413,6 @@ elif page == "Analytics Dashboard":
                         with col3:
                             st.metric("Max Services", df['service_count'].max())
                         
-                        # Bar chart - Top 20
                         st.markdown("### Top 20 Patients by Service Count")
                         
                         import plotly.express as px
@@ -437,11 +430,9 @@ elif page == "Analytics Dashboard":
                         fig.update_layout(xaxis_tickangle=-45, height=500)
                         st.plotly_chart(fig, use_container_width=True)
                         
-                        # Data table
                         st.markdown("### Complete Data Table")
                         st.dataframe(df, use_container_width=True)
                         
-                        # Download
                         csv = df.to_csv(index=False)
                         st.download_button("Download CSV", csv, "services_per_patient.csv", "text/csv")
                     else:
@@ -464,14 +455,12 @@ elif page == "Analytics Dashboard":
                         if len(df) > 0:
                             st.error(f"Found {len(df)} bill IDs missing in RIS!")
                             
-                            # Metrics
                             col1, col2 = st.columns(2)
                             with col1:
                                 st.metric("Missing Bill IDs", len(df))
                             with col2:
                                 st.metric("Total Missing Services", df['his_services'].sum())
                             
-                            # Chart
                             st.markdown("### Missing Services Distribution")
                             
                             import plotly.express as px
@@ -485,11 +474,9 @@ elif page == "Analytics Dashboard":
                             )
                             st.plotly_chart(fig, use_container_width=True)
                             
-                            # Data table
                             st.markdown("### Missing Records")
                             st.dataframe(df, use_container_width=True)
                             
-                            # Download
                             csv = df.to_csv(index=False)
                             st.download_button("Download Missing Records", csv, "missing_in_ris.csv", "text/csv")
                         else:
@@ -514,7 +501,6 @@ elif page == "Analytics Dashboard":
                         if len(df) > 0:
                             st.error(f"Found {len(df)} patients with mismatched service counts!")
                             
-                            # Metrics
                             col1, col2, col3 = st.columns(3)
                             with col1:
                                 st.metric("Mismatched Patients", len(df))
@@ -523,7 +509,6 @@ elif page == "Analytics Dashboard":
                             with col3:
                                 st.metric("Max Difference", df['difference'].max())
                             
-                            # Chart
                             st.markdown("### HIS vs RIS Service Count Comparison")
                             
                             import plotly.graph_objects as go
@@ -544,11 +529,9 @@ elif page == "Analytics Dashboard":
                             fig.update_xaxes(tickangle=-45)
                             st.plotly_chart(fig, use_container_width=True)
                             
-                            # Data table
                             st.markdown("### Mismatch Details")
                             st.dataframe(df, use_container_width=True)
                             
-                            # Download
                             csv = df.to_csv(index=False)
                             st.download_button("Download Mismatches", csv, "service_mismatches.csv", "text/csv")
                         else:
@@ -570,7 +553,6 @@ elif page == "Analytics Dashboard":
                         data = response.json()['data']
                         df = pd.DataFrame(data)
                         
-                        # Metrics
                         col1, col2, col3 = st.columns(3)
                         with col1:
                             st.metric("Total Days", len(df))
@@ -579,7 +561,6 @@ elif page == "Analytics Dashboard":
                         with col3:
                             st.metric("Peak Day Services", df['total_services'].max())
                         
-                        # Line chart
                         st.markdown("### Daily Service Trends")
                         
                         import plotly.express as px
@@ -595,11 +576,9 @@ elif page == "Analytics Dashboard":
                         fig.update_layout(height=500)
                         st.plotly_chart(fig, use_container_width=True)
                         
-                        # Data table
                         st.markdown("### Daily Data")
                         st.dataframe(df, use_container_width=True)
                         
-                        # Download
                         csv = df.to_csv(index=False)
                         st.download_button("Download Trends", csv, "daily_trends.csv", "text/csv")
                     else:
@@ -619,7 +598,6 @@ elif page == "Analytics Dashboard":
                         data = response.json()['data']
                         df = pd.DataFrame(data)
                         
-                        # Metrics
                         col1, col2, col3 = st.columns(3)
                         with col1:
                             st.metric("Total Service Types", len(df))
@@ -628,7 +606,6 @@ elif page == "Analytics Dashboard":
                         with col3:
                             st.metric("Usage Count", df.iloc[0]['count'])
                         
-                        # Horizontal bar chart
                         st.markdown("### Top 20 Services by Usage")
                         
                         import plotly.express as px
@@ -646,7 +623,6 @@ elif page == "Analytics Dashboard":
                         fig.update_layout(height=600, yaxis={'categoryorder': 'total ascending'})
                         st.plotly_chart(fig, use_container_width=True)
                         
-                        # Pie chart for unique patients
                         st.markdown("### Unique Patients Distribution (Top 10)")
                         
                         top_10 = df.head(10)
@@ -658,11 +634,9 @@ elif page == "Analytics Dashboard":
                         )
                         st.plotly_chart(fig2, use_container_width=True)
                         
-                        # Data table
                         st.markdown("### Service Details")
                         st.dataframe(df, use_container_width=True)
                         
-                        # Download
                         csv = df.to_csv(index=False)
                         st.download_button("Download Services", csv, "top_services.csv", "text/csv")
                     else:
@@ -674,7 +648,6 @@ elif page == "Analytics Dashboard":
         st.subheader("HIS vs RIS Service Comparison by Patient")
         st.markdown("Compare service names/descriptions between HIS and RIS files for each patient")
         
-        # Search bar
         col1, col2 = st.columns([3, 1])
         with col1:
             search_query = st.text_input(
@@ -686,11 +659,9 @@ elif page == "Analytics Dashboard":
             search_btn = st.button("Search", type="primary", key="search_patient_btn")
             show_all = st.button("Show All (Top 100)", key="show_all_btn")
         
-        # Load data based on search or show all
         if search_btn or show_all or search_query:
             with st.spinner("Loading patient data..."):
                 try:
-                    # Determine which mode
                     if show_all:
                         search_param = ""
                     else:
@@ -707,7 +678,6 @@ elif page == "Analytics Dashboard":
                         if data:
                             df = pd.DataFrame(data)
                             
-                            # Summary metrics
                             col1, col2, col3, col4 = st.columns(4)
                             with col1:
                                 st.metric("Total Patients", len(df))
@@ -723,14 +693,12 @@ elif page == "Analytics Dashboard":
                             
                             st.markdown("---")
                             
-                            # Display options
                             display_mode = st.radio(
                                 "Display Mode:",
                                 ["All Patients", "Mismatched Only", "Missing in One File"],
                                 horizontal=True
                             )
                             
-                            # Filter based on display mode
                             if display_mode == "Mismatched Only":
                                 filtered_df = df[df['his_service_count'] != df['ris_service_count']]
                             elif display_mode == "Missing in One File":
@@ -740,7 +708,6 @@ elif page == "Analytics Dashboard":
                             
                             st.markdown(f"### Patient Service Comparison ({len(filtered_df)} records)")
                             
-                            # Enhanced table display with styling
                             for idx, row in filtered_df.iterrows():
                                 with st.expander(
                                     f"👤 {row['patient_name']} - ID: {row['id']} "
@@ -767,21 +734,18 @@ elif page == "Analytics Dashboard":
                                         else:
                                             st.warning("No services in RIS")
                                     
-                                    # Highlight if counts don't match
                                     if row['his_service_count'] != row['ris_service_count']:
                                         st.error(f"Service count mismatch: HIS has {row['his_service_count']}, RIS has {row['ris_service_count']}")
                             
-                            # Compact table view option
                             st.markdown("---")
                             if st.checkbox("Show Compact Table View"):
-                                # Create simplified dataframe
+                                
                                 display_df = filtered_df[[
                                     'patient_name', 'id', 
                                     'his_service_count', 'ris_service_count',
                                     'his_services', 'ris_services'
                                 ]].copy()
                                 
-                                # Truncate long service lists for table
                                 display_df['his_services'] = display_df['his_services'].apply(
                                     lambda x: (x[:100] + '...') if x and len(x) > 100 else x
                                 )
@@ -791,7 +755,6 @@ elif page == "Analytics Dashboard":
                                 
                                 st.dataframe(display_df, use_container_width=True)
                             
-                            # Download button
                             st.markdown("---")
                             csv = filtered_df.to_csv(index=False)
                             st.download_button(
@@ -808,7 +771,6 @@ elif page == "Analytics Dashboard":
                 except Exception as e:
                     st.error(f"Error: {str(e)}")
         else:
-            # Initial state - show instructions
             st.info("Use the search bar above to find specific patients or click 'Show All' to see top 100 patients")
             
             st.markdown("""
