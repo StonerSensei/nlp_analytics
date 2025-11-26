@@ -333,14 +333,17 @@ elif page == "Analytics Dashboard":
     
     st.info("Click on any analysis button to view results and visualizations")
     
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10 = st.tabs([
         "Records Comparison",
         "Services per Patient", 
         "Missing in RIS",
         "Service Mismatch",
         "Daily Trends",
         "Top Services",
-        "Service Comparison"
+        "Service Comparison",
+        "Order Type & Modality",
+        "Worklist Details",
+        "Comprehensive View"
     ])
     
     # TAB 1: Records Comparison
@@ -789,6 +792,255 @@ elif page == "Analytics Dashboard":
             - **Validate data consistency** across both files
             - **Spot data entry errors** by comparing service descriptions
             """)
+    with tab8:
+        st.subheader("Order Type & Modality - RIS vs Scan Detail")
+        
+        if st.button("Load Comparison", key="btn_order_modality"):
+            with st.spinner("Loading data..."):
+                try:
+                    response = requests.get(f"{BACKEND_URL}/analytics/order-type-modality-comparison")
+                    if response.status_code == 200:
+                        data = response.json()['data']
+                        df = pd.DataFrame(data)
+                        
+                        if len(df) > 0:
+                            col1, col2, col3, col4 = st.columns(4)
+                            with col1:
+                                st.metric("Total Patients", len(df))
+                            with col2:
+                                order_match = df[df['order_type_status'] == 'Match'].shape[0]
+                                st.metric("Order Type Match", order_match)
+                            with col3:
+                                modality_match = df[df['modality_status'] == 'Match'].shape[0]
+                                st.metric("Modality Match", modality_match)
+                            with col4:
+                                both_mismatch = df[
+                                    (df['order_type_status'] == 'Mismatch') | 
+                                    (df['modality_status'] == 'Mismatch')
+                                ].shape[0]
+                                st.metric("Mismatches", both_mismatch, delta_color="inverse")
+                            
+                            st.markdown("### Comparison Charts")
+                            
+                            col1, col2 = st.columns(2)
+                            
+                            with col1:
+                                import plotly.express as px
+                                status_df = df['order_type_status'].value_counts().reset_index()
+                                status_df.columns = ['Status', 'Count']
+                                fig = px.pie(
+                                    status_df,
+                                    values='Count',
+                                    names='Status',
+                                    title='Order Type Match Status'
+                                )
+                                st.plotly_chart(fig, use_container_width=True)
+                            
+                            with col2:
+                                modality_df = df['modality_status'].value_counts().reset_index()
+                                modality_df.columns = ['Status', 'Count']
+                                fig2 = px.pie(
+                                    modality_df,
+                                    values='Count',
+                                    names='Status',
+                                    title='Modality Match Status'
+                                )
+                                st.plotly_chart(fig2, use_container_width=True)
+                            
+                            st.markdown("### Filter Results")
+                            filter_option = st.radio(
+                                "Show:",
+                                ["All Records", "Order Type Mismatch Only", "Modality Mismatch Only", "Any Mismatch"],
+                                horizontal=True
+                            )
+                            
+                            if filter_option == "Order Type Mismatch Only":
+                                filtered_df = df[df['order_type_status'] == 'Mismatch']
+                            elif filter_option == "Modality Mismatch Only":
+                                filtered_df = df[df['modality_status'] == 'Mismatch']
+                            elif filter_option == "Any Mismatch":
+                                filtered_df = df[
+                                    (df['order_type_status'] == 'Mismatch') | 
+                                    (df['modality_status'] == 'Mismatch')
+                                ]
+                            else:
+                                filtered_df = df
+                            
+                            st.markdown(f"### Detailed Comparison ({len(filtered_df)} records)")
+                            st.dataframe(filtered_df, use_container_width=True)
+                            
+                            csv = filtered_df.to_csv(index=False)
+                            st.download_button("Download Data", csv, "order_modality_comparison.csv", "text/csv")
+                        else:
+                            st.info("No data found")
+                    else:
+                        st.error("Failed to load data")
+                except Exception as e:
+                    st.error(f"Error: {str(e)}")
+    
+    with tab9:
+        st.subheader("Worklist - Study Details & Assignments")
+        
+        search_patient = st.text_input(
+            "Search Patient in Worklist",
+            placeholder="Enter patient name",
+            key="worklist_search"
+        )
+        
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            search_btn = st.button("Search", type="primary", key="btn_worklist_search")
+        with col2:
+            show_all_btn = st.button("Show All (Top 100)", key="btn_worklist_all")
+        
+        if search_btn or show_all_btn:
+            with st.spinner("Loading worklist..."):
+                try:
+                    search_param = "" if show_all_btn else search_patient
+                    response = requests.get(
+                        f"{BACKEND_URL}/analytics/worklist-details",
+                        params={"patient_name": search_param}
+                    )
+                    
+                    if response.status_code == 200:
+                        data = response.json()['data']
+                        df = pd.DataFrame(data)
+                        
+                        if len(df) > 0:
+                            col1, col2, col3, col4 = st.columns(4)
+                            with col1:
+                                st.metric("Total Studies", len(df))
+                            with col2:
+                                assigned = df[df['assigned_to'].notna()].shape[0]
+                                st.metric("Assigned Studies", assigned)
+                            with col3:
+                                finalized = df[df['report_finalized_by'].notna()].shape[0]
+                                st.metric("Finalized Reports", finalized)
+                            with col4:
+                                unique_institutions = df['institution_name'].nunique()
+                                st.metric("Institutions", unique_institutions)
+                            
+                            st.markdown("### Study Details")
+                            for idx, row in df.iterrows():
+                                status_color = "🟢" if row['report_status'] == 'FINAL' else "🟡"
+                                with st.expander(
+                                    f"{status_color} {row['patient_name']} - {row['study']} ({row['study_date']})"
+                                ):
+                                    col1, col2, col3 = st.columns(3)
+                                    with col1:
+                                        st.markdown(f"**Patient ID:** {row['patient_id']}")
+                                        st.markdown(f"**Study:** {row['study']}")
+                                        st.markdown(f"**Study Time:** {row['study_time']}")
+                                    with col2:
+                                        st.markdown(f"**Institution:** {row['institution_name']}")
+                                        st.markdown(f"**Assigned To:** {row['assigned_to'] or 'Not Assigned'}")
+                                    with col3:
+                                        st.markdown(f"**Report Status:** {row['report_status']}")
+                                        st.markdown(f"**Finalized By:** {row['report_finalized_by'] or 'Pending'}")
+                            
+                            if st.checkbox("Show Table View", key="worklist_table"):
+                                st.dataframe(df, use_container_width=True)
+                            
+                            csv = df.to_csv(index=False)
+                            st.download_button("Download Worklist", csv, "worklist_data.csv", "text/csv")
+                        else:
+                            st.info("No records found")
+                    else:
+                        st.error("Failed to load data")
+                except Exception as e:
+                    st.error(f"Error: {str(e)}")
+    
+    # TAB 10: Comprehensive View (NEW)
+    with tab10:
+        st.subheader("Comprehensive Patient View - All Files Combined")
+        
+        st.markdown("""
+        View complete patient information across:
+        - **HIS**: Government billing and services
+        - **RIS**: Private facility records
+        - **Scan Detail**: Scan status and modality
+        - **Worklist**: Study assignments and reporting
+        """)
+        
+        search_comp = st.text_input(
+            "Search Patient Across All Files",
+            placeholder="Enter patient name",
+            key="comprehensive_search"
+        )
+        
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            comp_search_btn = st.button("Search", type="primary", key="btn_comp_search")
+        with col2:
+            comp_all_btn = st.button("Show All (Top 50)", key="btn_comp_all")
+        
+        if comp_search_btn or comp_all_btn:
+            with st.spinner("Loading comprehensive data..."):
+                try:
+                    search_param = "" if comp_all_btn else search_comp
+                    response = requests.get(
+                        f"{BACKEND_URL}/analytics/comprehensive-patient-view",
+                        params={"patient_name": search_param}
+                    )
+                    
+                    if response.status_code == 200:
+                        data = response.json()['data']
+                        df = pd.DataFrame(data)
+                        
+                        if len(df) > 0:
+                            st.success(f"Found {len(df)} patients")
+                            
+                            for idx, row in df.iterrows():
+                                with st.expander(f"👤 {row['patient_name']} (ID: {row['patient_id']})"):
+                                    tab_his, tab_ris, tab_scan, tab_work = st.tabs([
+                                        "HIS", "RIS", "Scan Detail", "Worklist"
+                                    ])
+                                    
+                                    with tab_his:
+                                        st.markdown(f"**Services:** {row['his_services'] or 'N/A'}")
+                                        st.metric("Service Count", row['his_service_count'] or 0)
+                                    
+                                    with tab_ris:
+                                        col1, col2 = st.columns(2)
+                                        with col1:
+                                            st.markdown(f"**Order Type:** {row['ris_order_type'] or 'N/A'}")
+                                            st.markdown(f"**Tests:** {row['ris_tests'] or 'N/A'}")
+                                        with col2:
+                                            st.markdown(f"**Modality:** {row['ris_modality'] or 'N/A'}")
+                                            st.metric("Test Count", row['ris_test_count'] or 0)
+                                    
+                                    with tab_scan:
+                                        col1, col2 = st.columns(2)
+                                        with col1:
+                                            st.markdown(f"**Order Type:** {row['scan_order_type'] or 'N/A'}")
+                                            st.markdown(f"**Modality:** {row['scan_modality'] or 'N/A'}")
+                                        with col2:
+                                            st.markdown(f"**Scan Status:** {row['scan_status'] or 'N/A'}")
+                                            st.markdown(f"**Order Status:** {row['order_status'] or 'N/A'}")
+                                    
+                                    with tab_work:
+                                        col1, col2 = st.columns(2)
+                                        with col1:
+                                            st.markdown(f"**Study:** {row['study'] or 'N/A'}")
+                                            st.markdown(f"**Institution:** {row['institution_name'] or 'N/A'}")
+                                            st.markdown(f"**Study Time:** {row['study_time'] or 'N/A'}")
+                                        with col2:
+                                            st.markdown(f"**Assigned To:** {row['assigned_to'] or 'Not Assigned'}")
+                                            st.markdown(f"**Finalized By:** {row['report_finalized_by'] or 'Pending'}")
+                                            st.markdown(f"**Report Status:** {row['report_status'] or 'N/A'}")
+                            
+                            if st.checkbox("Show Full Data Table", key="comp_table"):
+                                st.dataframe(df, use_container_width=True)
+                            
+                            csv = df.to_csv(index=False)
+                            st.download_button("Download Comprehensive Data", csv, "comprehensive_view.csv", "text/csv")
+                        else:
+                            st.info("No patients found")
+                    else:
+                        st.error("Failed to load data")
+                except Exception as e:
+                    st.error(f"Error: {str(e)}")
+
 
 
 

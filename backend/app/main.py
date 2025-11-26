@@ -803,3 +803,154 @@ def patient_search(query: str):
         return {"data": [dict(zip(columns, row)) for row in rows]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/analytics/order-type-modality-comparison")
+def order_type_modality_comparison():
+    """Compare Order Type and Modality across RIS and Scan files"""
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text("""
+                SELECT 
+                    COALESCE(r.patient_id, s.patient_id) as patient_id,
+                    COALESCE(r.patient, s.patient) as patient_name,
+                    r.order_type as ris_order_type,
+                    s.order_type as scan_order_type,
+                    r.modality as ris_modality,
+                    s.modality as scan_modality,
+                    CASE 
+                        WHEN r.order_type = s.order_type THEN 'Match'
+                        ELSE 'Mismatch'
+                    END as order_type_status,
+                    CASE 
+                        WHEN r.modality = s.modality THEN 'Match'
+                        ELSE 'Mismatch'
+                    END as modality_status
+                FROM ris r
+                FULL OUTER JOIN scan_detail s ON r.patient_id = s.patient_id
+                WHERE r.patient_id IS NOT NULL OR s.patient_id IS NOT NULL
+                ORDER BY patient_name
+                LIMIT 100
+            """))
+            rows = result.fetchall()
+            columns = result.keys()
+        
+        return {"data": [dict(zip(columns, row)) for row in rows]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/analytics/worklist-details")
+def worklist_details(patient_name: str = ""):
+    """Get worklist information: Study, Institution, Study Time, Assigned To"""
+    try:
+        with engine.connect() as conn:
+            base_query = """
+                SELECT 
+                    patient_id,
+                    patient_name,
+                    study,
+                    institution_name,
+                    study_time,
+                    assigned_to,
+                    report_finalized_by,
+                    report as report_status,
+                    study_date
+                FROM worklist
+            """
+            
+            if patient_name:
+                base_query += " WHERE LOWER(patient_name) LIKE LOWER(:pattern)"
+                result = conn.execute(
+                    text(base_query + " ORDER BY study_date DESC, study_time DESC LIMIT 100"),
+                    {"pattern": f"%{patient_name}%"}
+                )
+            else:
+                result = conn.execute(text(base_query + " ORDER BY study_date DESC, study_time DESC LIMIT 100"))
+            
+            rows = result.fetchall()
+            columns = result.keys()
+        
+        return {"data": [dict(zip(columns, row)) for row in rows]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/analytics/comprehensive-patient-view")
+def comprehensive_patient_view(patient_name: str = ""):
+    """
+    Comprehensive view combining HIS, RIS, Scan Detail, and Worklist
+    """
+    try:
+        with engine.connect() as conn:
+            base_query = """
+                SELECT 
+                    COALESCE(h.bill_id, r.patient_id, s.patient_id, w.patient_id) as patient_id,
+                    COALESCE(h.patient_name, r.patient, s.patient, w.patient_name) as patient_name,
+                    
+                    -- HIS Info
+                    STRING_AGG(DISTINCT h.service_description, ' | ') as his_services,
+                    COUNT(DISTINCT h.id) as his_service_count,
+                    
+                    -- RIS Info
+                    r.order_type as ris_order_type,
+                    r.modality as ris_modality,
+                    STRING_AGG(DISTINCT r.test_name, ' | ') as ris_tests,
+                    COUNT(DISTINCT r.id) as ris_test_count,
+                    
+                    -- Scan Detail Info
+                    s.order_type as scan_order_type,
+                    s.modality as scan_modality,
+                    s.scan_status,
+                    s.order_status,
+                    
+                    -- Worklist Info
+                    w.study,
+                    w.institution_name,
+                    w.study_time,
+                    w.assigned_to,
+                    w.report_finalized_by,
+                    w.report as report_status
+                    
+                FROM his h
+                FULL OUTER JOIN ris r ON h.bill_id = r.patient_id
+                FULL OUTER JOIN scan_detail s ON COALESCE(h.bill_id, r.patient_id) = s.patient_id
+                FULL OUTER JOIN worklist w ON COALESCE(h.bill_id, r.patient_id, s.patient_id) = w.patient_id
+            """
+            
+            if patient_name:
+                base_query += """
+                WHERE LOWER(h.patient_name) LIKE LOWER(:pattern)
+                   OR LOWER(r.patient) LIKE LOWER(:pattern)
+                   OR LOWER(s.patient) LIKE LOWER(:pattern)
+                   OR LOWER(w.patient_name) LIKE LOWER(:pattern)
+                """
+                result = conn.execute(
+                    text(base_query + """
+                        GROUP BY h.bill_id, r.patient_id, s.patient_id, w.patient_id,
+                                 h.patient_name, r.patient, s.patient, w.patient_name,
+                                 r.order_type, r.modality, s.order_type, s.modality, 
+                                 s.scan_status, s.order_status, w.study, w.institution_name,
+                                 w.study_time, w.assigned_to, w.report_finalized_by, w.report
+                        ORDER BY patient_name
+                        LIMIT 50
+                    """),
+                    {"pattern": f"%{patient_name}%"}
+                )
+            else:
+                result = conn.execute(text(base_query + """
+                    GROUP BY h.bill_id, r.patient_id, s.patient_id, w.patient_id,
+                             h.patient_name, r.patient, s.patient, w.patient_name,
+                             r.order_type, r.modality, s.order_type, s.modality, 
+                             s.scan_status, s.order_status, w.study, w.institution_name,
+                             w.study_time, w.assigned_to, w.report_finalized_by, w.report
+                    ORDER BY patient_name
+                    LIMIT 50
+                """))
+            
+            rows = result.fetchall()
+            columns = result.keys()
+        
+        return {"data": [dict(zip(columns, row)) for row in rows]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
