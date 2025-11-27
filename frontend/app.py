@@ -105,7 +105,6 @@ elif page == "Query Data":
 elif page == "View Tables":
     st.header("Database Tables")
     
-    # Auto-load tables on page load
     try:
         response = requests.get(f"{BACKEND_URL}/tables")
         
@@ -119,7 +118,6 @@ elif page == "View Tables":
                     with st.expander(f" {table['name'].upper()} ({table['row_count']} rows)"):
                         st.write("**Columns:**", ", ".join(table['columns']))
                         
-                        # View data button
                         if st.button("View Data", key=f"view_{table['name']}"):
                             with st.spinner("Loading data..."):
                                 limit = st.session_state.get(f"limit_{table['name']}", 50)
@@ -131,7 +129,6 @@ elif page == "View Tables":
                                         df = pd.DataFrame(data)
                                         st.dataframe(df, use_container_width=True)
                                         
-                                        # Download button
                                         csv = df.to_csv(index=False)
                                         st.download_button(
                                             "Download CSV",
@@ -145,7 +142,6 @@ elif page == "View Tables":
                                 else:
                                     st.error(f"Failed to load data: {data_response.status_code}")
                         
-                        # Limit selector
                         limit = st.number_input(
                             "Rows to display",
                             min_value=10,
@@ -155,7 +151,6 @@ elif page == "View Tables":
                             key=f"limit_{table['name']}"
                         )
                         
-                        # Delete button
                         if st.button("Delete Table", key=f"delete_{table['name']}"):
                             st.warning(f"Are you sure you want to delete {table['name']}?")
                             
@@ -243,7 +238,7 @@ WHERE r.patient_id IS NULL;
             st.warning("Please enter a SQL query")
 
 
-# Data Validation Page
+# Data Validation Page update
 elif page == "Data Validation":
     st.header("Data Validation - HIS vs RIS")
     
@@ -258,7 +253,6 @@ elif page == "Data Validation":
                     data = response.json()
                     summary = data['summary']
                     
-                    # Summary Metrics
                     st.subheader("Summary")
                     col1, col2, col3, col4 = st.columns(4)
                     
