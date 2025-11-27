@@ -290,7 +290,6 @@ elif page == "Data Validation":
                         missing_df = pd.DataFrame({"Patient ID": data['missing_in_his']})
                         st.dataframe(missing_df, use_container_width=True)
                     
-                    # Service Count Comparison
                     st.subheader("Service Count Comparison")
                     
                     col1, col2 = st.columns(2)
