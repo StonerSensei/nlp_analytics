@@ -2,6 +2,8 @@ import streamlit as st
 import requests
 import pandas as pd
 import os
+import plotly.express as px
+import plotly.graph_objects as go
 
 # Backend API URL
 BACKEND_URL = os.getenv("BACKEND_API_URL", "http://backend:8000")
@@ -371,7 +373,6 @@ elif page == "Analytics Dashboard":
                         
                         st.markdown("### Visual Comparison")
                         
-                        import plotly.graph_objects as go
                         
                         fig = go.Figure(data=[
                             go.Bar(name='Total Records', x=df['source'], y=df['total_records']),
@@ -418,7 +419,7 @@ elif page == "Analytics Dashboard":
                         
                         st.markdown("### Top 20 Patients by Service Count")
                         
-                        import plotly.express as px
+                        
                         
                         top_20 = df.head(20)
                         fig = px.bar(
@@ -466,8 +467,6 @@ elif page == "Analytics Dashboard":
                             
                             st.markdown("### Missing Services Distribution")
                             
-                            import plotly.express as px
-                            
                             fig = px.histogram(
                                 df,
                                 x='his_services',
@@ -514,7 +513,6 @@ elif page == "Analytics Dashboard":
                             
                             st.markdown("### HIS vs RIS Service Count Comparison")
                             
-                            import plotly.graph_objects as go
                             
                             top_10 = df.head(10)
                             
@@ -566,8 +564,6 @@ elif page == "Analytics Dashboard":
                         
                         st.markdown("### Daily Service Trends")
                         
-                        import plotly.express as px
-                        
                         fig = px.line(
                             df,
                             x='date',
@@ -610,8 +606,6 @@ elif page == "Analytics Dashboard":
                             st.metric("Usage Count", df.iloc[0]['count'])
                         
                         st.markdown("### Top 20 Services by Usage")
-                        
-                        import plotly.express as px
                         
                         fig = px.bar(
                             df,
@@ -825,7 +819,7 @@ elif page == "Analytics Dashboard":
                             col1, col2 = st.columns(2)
                             
                             with col1:
-                                import plotly.express as px
+                                
                                 status_df = df['order_type_status'].value_counts().reset_index()
                                 status_df.columns = ['Status', 'Count']
                                 fig = px.pie(
