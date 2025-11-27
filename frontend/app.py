@@ -258,7 +258,6 @@ elif page == "Data Validation":
                     data = response.json()
                     summary = data['summary']
                     
-                    
                     # Summary Metrics
                     st.subheader("Summary")
                     col1, col2, col3, col4 = st.columns(4)
