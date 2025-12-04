@@ -5,14 +5,12 @@ import os
 import plotly.express as px
 import plotly.graph_objects as go
 
-# Backend API URL
 BACKEND_URL = os.getenv("BACKEND_API_URL", "http://backend:8000")
 
 st.set_page_config(page_title="Hospital Data Analysis", layout="wide")
 
 st.title("🏥 Hospital Data Analysis - NLP to SQL")
 
-# Sidebar
 with st.sidebar:
     st.header("Navigation")
     page = st.radio("Select Page", ["Upload CSV", "Analytics Dashboard","Query Data", "View Tables", "Execute SQL"])
@@ -20,26 +18,46 @@ with st.sidebar:
     st.markdown("---")
     st.caption(f"Backend: {BACKEND_URL}")
 
-# Upload CSV Page
 if page == "Upload CSV":
     st.header("Upload CSV Files")
     
-    st.info("Upload HIS.csv (skip 0 rows) and RIS.csv (skip 5 rows)")
+    st.info("Upload HIS.csv (skip 0 rows), RIS.csv (skip 5 rows), Scan_detail.csv (skip 5 rows), Worklist.csv (skip 0 rows)")
     
     uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
     
+    default_table = "his"
+    default_skip = 0
+    
+    if uploaded_file:
+        fname = uploaded_file.name.upper()
+        if "HIS" in fname:
+            default_table = "his"
+            default_skip = 0
+        elif "RIS" in fname:
+            default_table = "ris"
+            default_skip = 5
+        elif "SCAN" in fname or "SCAN_DETAIL" in fname:
+            default_table = "scan_detail"
+            default_skip = 5
+        elif "WORKLIST" in fname:
+            default_table = "worklist"
+            default_skip = 0
+    
     col1, col2 = st.columns(2)
     with col1:
-        table_name = st.text_input("Table Name", value="his" if uploaded_file and "HIS" in uploaded_file.name.upper() else "ris")
+        table_name = st.text_input("Table Name", value=default_table)
     with col2:
-        skip_rows = st.number_input("Skip Rows (for headers)", min_value=0, value=5 if uploaded_file and "RIS" in uploaded_file.name.upper() else 0)
-    
+        skip_rows = st.number_input(
+            "Skip Rows (for headers)",
+            min_value=0,
+            value=default_skip,
+        )
     if st.button("Upload and Process", type="primary"):
         if uploaded_file and table_name:
             with st.spinner("Processing..."):
                 try:
                     files = {"file": (uploaded_file.name, uploaded_file.getvalue(), "text/csv")}
-                    data = {"table_name": table_name, "skip_rows": skip_rows}
+                    data = {"table_name": table_name, "skip_rows": int(skip_rows)}
                     
                     response = requests.post(f"{BACKEND_URL}/upload-csv", files=files, data=data)
                     
@@ -57,7 +75,6 @@ if page == "Upload CSV":
         else:
             st.warning("Please upload a file and provide a table name")
 
-# Query Data Page
 elif page == "Query Data":
     st.header("Natural Language Query")
     
@@ -89,7 +106,6 @@ elif page == "Query Data":
                             df = pd.DataFrame(result['results'])
                             st.dataframe(df, use_container_width=True)
                             
-                            # Download button
                             csv = df.to_csv(index=False)
                             st.download_button("Download CSV", csv, "query_results.csv", "text/csv")
                         else:
@@ -101,7 +117,6 @@ elif page == "Query Data":
         else:
             st.warning("Please enter a query")
 
-# View Tables Page
 elif page == "View Tables":
     st.header("Database Tables")
     
@@ -181,11 +196,9 @@ elif page == "View Tables":
     except Exception as e:
         st.error(f"Error: {str(e)}")
     
-    # Manual refresh button
     if st.button("Refresh", key="manual_refresh"):
         st.rerun()
 
-# Execute SQL Page
 elif page == "Execute SQL":
     st.header("Execute SQL Query")
     
@@ -238,7 +251,6 @@ WHERE r.patient_id IS NULL;
             st.warning("Please enter a SQL query")
 
 
-# Data Validation Page update
 elif page == "Data Validation":
     st.header("Data Validation - HIS vs RIS")
     
@@ -274,7 +286,6 @@ elif page == "Data Validation":
                                  delta=None if summary['mismatched_count'] == 0 else "Issues",
                                  delta_color="inverse")
                     
-                    # Missing Records
                     if summary['missing_in_ris_count'] > 0:
                         st.subheader("Bill IDs in HIS but NOT in RIS")
                         st.error(f"Found {summary['missing_in_ris_count']} bill_ids missing in RIS file")
@@ -304,7 +315,6 @@ elif page == "Data Validation":
                         ris_df = pd.DataFrame(data['ris_entry_counts'])
                         st.dataframe(ris_df, use_container_width=True)
                     
-                    # Mismatched Records
                     if summary['mismatched_count'] > 0:
                         st.subheader("Mismatched Service Counts")
                         st.error(f"Found {summary['mismatched_count']} patients with different service counts")
@@ -322,7 +332,6 @@ elif page == "Data Validation":
             except Exception as e:
                 st.error(f"Error: {str(e)}")
 
-# Analytics Dashboard Page
 elif page == "Analytics Dashboard":
     st.header("Analytics Dashboard - HIS vs RIS Validation")
     
@@ -1034,5 +1043,3 @@ elif page == "Analytics Dashboard":
 # Footer
 st.markdown("---")
 st.markdown("Built for Hospital Data Analysis | NLP to SQL with Ollama SQLCoder")
-
-
